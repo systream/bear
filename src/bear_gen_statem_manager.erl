@@ -118,11 +118,11 @@ trigger_reallocate() ->
                     Node when node() =:= Node ->
                       ok;
                     NewNode ->
+                      io:format(user, "~p - ~p set to handoff mode ~n", [Id, Pid]),
+                      ok = bear_gen_statem_handler:handoff(Pid),
                       io:format(user, "~p should be reallocated to ~p~n", [Id, NewNode]),
                       {ok, NewPid} = rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module]),
                       io:format(user, "~p new server started ~p~n", [Id, NewPid]),
-                      ok = bear_gen_statem_handler:handoff(Pid, NewPid),
-                      io:format(user, "~p handoff ready ~p~n", [Id, NewPid]),
                       timer:sleep(25)
                   end
                 end, bear_gen_statem_sup:children()).

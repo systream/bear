@@ -9,11 +9,11 @@
 
 -behaviour(gen_statem).
 
--define(HANDOFF_TIMEOUT, 3000).
+-define(HANDOFF_TIMEOUT, 5000).
 -define(BUCKET, <<"bear">>).
 
 %% API
--export([start_link/4, handoff/2]).
+-export([start_link/3, handoff/1]).
 
 %% gen_statem callbacks
 -export([init/1, handle_event/4, terminate/3, callback_mode/0]).
@@ -36,8 +36,8 @@
 %%% API
 %%%===================================================================
 
-handoff(Id, NewPid) ->
-  call(Id, {handoff, NewPid}).
+handoff(Id) ->
+  call(Id, handoff).
 
 call(Server, Command) when is_pid(Server) ->
   gen_statem:call(Server, Command);
@@ -47,8 +47,8 @@ call(Id, Command) ->
 %% @doc Creates a gen_statem process which calls Module:init/1 to
 %% initialize. To ensure a synchronized start-up procedure, this
 %% function does not return until Module:init/1 has returned.
-start_link(Register, Id, Module, Args) ->
-  gen_statem:start_link(?MODULE, [Register, Id, Module, Args], []).
+start_link(Id, Module, Args) ->
+  gen_statem:start_link(?MODULE, [Id, Module, Args], []).
 
 %%%===================================================================
 %%% gen_statem callbacks
@@ -62,37 +62,35 @@ init([Id, Module, Args]) ->
   case pes:whereis_name(Id) of
     undefined ->
       yes = pes:register_name(Id, self()),
-      init([Id, Module, Args]);
+      case bear_backend:fetch(?BUCKET, Id) of
+        {ok, Obj} ->
+          io:format(user, "[~p - ~p] state fatched from backed~n", [Id, self()]),
+          #store_state{cb_data = CbData, state_name = StateName} = decode_stored_state(bear_backend:value(Obj)),
+          io:format(user, "[~p - ~p] started from stored state~n", [Id, self()]),
+          Data = #state{id = Id, stored = Obj, module = Module, cb_data = CbData},
+          %erlang:process_flag(trap_exit, true),
+          {ok, StateName, Data};
+        not_found ->
+          case apply(Module, init, [Args]) of
+            {ok, StateName, Data, Actions} ->
+              io:format(user, "[~p - ~p] started from initilzed state~n", [Id, self()]),
+              State = #state{id = Id, module = Module, cb_data = Data},
+              {ok, StateName, save_state(StateName, State), Actions};
+            {ok, StateName, Data} ->
+              io:format(user, "[~p - ~p] started from initilzed state~n", [Id, self()]),
+              State = #state{id = Id, module = Module, cb_data = Data},
+              {ok, StateName, save_state(StateName, State)}
+          end;
+        {error, Error} ->
+          {error, {failed_to_fetch_state, Error}}
+      end;
     Pid ->
-      case catch gen_statem:call(Pid, in_handoff) of
-        yes ->
-          init([Id, Module, Args]);
+      case catch gen_statem:call(Pid, {ready_to_receive, self()}) of
+        ok ->
+          {ok, wait_for_handoff, undefined};
         _ ->
           {stop, already_started}
       end
-  end;
-init([Id, Module, Args]) ->
-  case bear_backend:fetch(?BUCKET, Id) of
-    {ok, Obj} ->
-      io:format(user, "[~p - ~p] state fatched from backed~n", [Id, self()]),
-      #store_state{cb_data = CbData, state_name = StateName} = decode_stored_state(bear_backend:value(Obj)),
-      io:format(user, "[~p - ~p] started from stored state~n", [Id, self()]),
-      Data = #state{id = Id, stored = Obj, module = Module, cb_data = CbData},
-      %erlang:process_flag(trap_exit, true),
-      {ok, StateName, Data};
-    not_found ->
-      case apply(Module, init, [Args]) of
-        {ok, StateName, Data, Actions} ->
-          io:format(user, "[~p - ~p] started from initilzed state~n", [Id, self()]),
-          State = #state{id = Id, module = Module, cb_data = Data},
-          {ok, StateName, save_state(StateName, State), Actions};
-        {ok, StateName, Data} ->
-          io:format(user, "[~p - ~p] started from initilzed state~n", [Id, self()]),
-          State = #state{id = Id, module = Module, cb_data = Data},
-          {ok, StateName, save_state(StateName, State)}
-      end;
-    {error, Error} ->
-      {error, {failed_to_fetch_state, Error}}
   end.
 
 
@@ -110,38 +108,55 @@ callback_mode() ->
 %handle_event(enter, _, _, _State) ->
 %  keep_state_and_data;
 
-handle_event({call, From}, {handoff, NewPid}, _StateName, State = #state{}) ->
+handle_event({call, From}, handoff, StateName, State = #state{}) ->
   io:format(user, "[~p - ~p] handoff command received ~n", [State#state.id, self()]),
   gen_statem:reply(From, ok),
-  {next_state, {handoff, NewPid}, State};
+  {next_state, {prepare_handoff, StateName}, State};
+
+handle_event(enter, _PrevState, {prepare_handoff, _StateName}, State) ->
+  {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
+handle_event({call, From}, {ready_to_receive, NewPid}, {prepare_handoff, StateName}, #state{} = State) ->
+  gen_statem:reply(From, ok),
+  {next_state, {handoff, NewPid, StateName}, State};
+handle_event({call, From}, {ready_to_receive, _Pid}, _, #state{} = _State) ->
+  gen_statem:reply(From, {error, not_in_handoff}),
+  keep_state_and_data;
+handle_event(state_timeout, stop, {prepare_handoff, StateName}, #state{} = State) ->
+  io:format(user, "[~p - ~p] prepare handoff timeout ~n", [State#state.id, self()]),
+  {next_state, StateName, State};
+handle_event(EventType, _EventContext, {prepare_handoff, _StateName}, _State) when EventType =/= enter ->
+  % Postpone all the event until while in prepare handoff mode,
+  % on timeout or entering handoff mode all the event will be replayed
+  {keep_state_and_data, [postpone]};
 
 % handoff state
-handle_event(enter, _PrevState, {handoff, _NewPid}, State) ->
-  {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
-
-handle_event({call, From}, {ready_to_receive, NewPid}, {handoff, NewPid}, #state{} = State) ->
-  gen_statem:reply(From, ok),
+handle_event(enter, _PrevState, {handoff, NewPid, StateName}, State) ->
   io:format(user, "[~p - ~p] handoff to ~p~n", [State#state.id, self(), NewPid]),
-  ok = gen_statem:call(NewPid, {state_handoff, PrevState, State}),
+  ok = gen_statem:call(NewPid, {state_handoff, StateName, State}),
   io:format(user, "[~p - ~p] state transferred to ~p~n", [State#state.id, self(), NewPid]),
   A = pes:update(State#state.id, NewPid),
   io:format(user, "pes: ~p~n", [A]),
   io:format(user, "[~p - ~p] pes catalog updated to ~p~n", [State#state.id, self(), NewPid]),
-  keep_state_and_data;
-handle_event({call, From}, {ready_to_receive, _Pid}, _, #state{} = _State) ->
-  gen_statem:reply(From, {error, not_in_handoff_or_target_pid_mismatch}),
-  keep_state_and_data;
-handle_event(state_timeout, stop, {handoff, _}, #state{} = State) ->
+  {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
+handle_event(state_timeout, stop, {handoff, _, _}, #state{} = State) ->
   {stop, normal, State};
-handle_event(EventType, EventContext, {handoff, NewPid}, _State) ->
+handle_event(EventType, EventContext, {handoff, NewPid, _}, _State) ->
+  % transfer all the request to the new pid during the handoff event
   NewPid ! {handoff, EventType, EventContext},
   keep_state_and_data;
 
 % receive handoff
-% @todo only in wait for handoff state
-handle_event({call, From}, {state_handoff, StateName, State}, _, _State) ->
+handle_event(enter, _PrevState, wait_for_handoff, State) ->
+  {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
+handle_event({call, From}, {state_handoff, StateName, State}, wait_for_handoff, _State) ->
   io:format(user, "[~p - ~p] state received ~n", [State#state.id, self()]),
   {next_state, StateName, State, [{reply, From, ok}]};
+handle_event(state_timeout, stop, wait_for_handoff, #state{} = State) ->
+  {stop, no_handoff_received, State};
+handle_event(EventType, _EventContext, wait_for_handoff, _State) when EventType =/= enter ->
+  % postpone all the event until we received the handoff
+  {keep_state_and_data, [postpone]};
+
 handle_event(info, {handoff, EventType, EventContext}, StateName, State) ->
   io:format(user, "[~p - ~p] got handoff event ~n", [State#state.id, self()]),
   handle_event(EventType, EventContext, StateName, State);
@@ -170,7 +185,10 @@ terminate(Reason, StateName, State = #state{module = Module, stored = Obj, cb_da
   io:format(user, "[~p - ~p] terminated ~p~n", [State#state.id, self(), Reason]),
   Result = apply(Module, terminate, [Reason, StateName, CBData]),
   ok = bear_backend:remove(Obj),
-  Result.
+  Result;
+terminate(Reason, _StateName, undefined) ->
+  io:format(user, "Terminated: ~p", [Reason]),
+  ok.
 
 %%%===================================================================
 %%% Internal functions

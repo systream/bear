@@ -26,7 +26,7 @@
 %%%===================================================================
 
 start_child(Id, Module, Args) ->
-  case supervisor:start_child(?SERVER, child_spec(true, Id, Module, Args)) of
+  case supervisor:start_child(?SERVER, child_spec(Id, Module, Args)) of
     {error, already_present} ->
       supervisor:delete_child(?SERVER, Id),
       start_child(Id, Module, Args);
@@ -45,7 +45,7 @@ terminate_child(Id) ->
   end.
 
 start_handoff(Id, Module) ->
-  supervisor:start_child(?SERVER, child_spec(false, Id, Module)).
+  supervisor:start_child(?SERVER, child_spec(Id, Module)).
 
 children() ->
   [{Id, Pid, Modules} ||
@@ -83,13 +83,13 @@ init([]) ->
 %%% Internal functions
 %%%===================================================================
 
-child_spec(Register, Name, Module, Args) ->
+child_spec(Name, Module, Args) ->
   #{id => Name,
-    start => {'bear_gen_statem_handler', start_link, [Register, Name, Module, Args]},
+    start => {'bear_gen_statem_handler', start_link, [Name, Module, Args]},
     restart => transient,
     shutdown => 5000,
     type => worker,
     modules => ['bear_gen_statem_handler', Module]}.
 
-child_spec(Register, Name, Module) ->
-  child_spec(Register, Name, Module, undefined).
+child_spec(Name, Module) ->
+  child_spec(Name, Module, undefined).
