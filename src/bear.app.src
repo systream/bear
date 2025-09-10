@@ -1,0 +1,18 @@
+{application, bear,
+ [{description, "An OTP application"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {bear_app, []}},
+  {applications,
+   [kernel,
+    stdlib,
+    pes,
+    poolboy,
+    riakc
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {licenses, ["Apache-2.0"]},
+  {links, []}
+ ]}.

@@ -1,0 +1,37 @@
+{"1.2.0",
+[{<<"exometer_core">>,{pkg,<<"exometer_core">>,<<"2.0.0">>},1},
+ {<<"hamcrest">>,{pkg,<<"basho_hamcrest">>,<<"0.4.1">>},2},
+ {<<"hut">>,{pkg,<<"hut">>,<<"1.3.0">>},2},
+ {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"3.4.1">>},2},
+ {<<"pes">>,
+  {git,"https://github.com/systream/pes.git",
+       {ref,"7255fc8e583f20010a6f3dbd679519bc2d9df04e"}},
+  0},
+ {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},0},
+ {<<"riak_pb">>,{pkg,<<"riak_pb">>,<<"2.3.2">>},1},
+ {<<"riakc">>,{pkg,<<"riakc">>,<<"2.5.3">>},0},
+ {<<"setup">>,{pkg,<<"setup">>,<<"2.1.0">>},2},
+ {<<"simple_gossip">>,
+  {git,"https://github.com/systream/simple_gossip.git",
+       {ref,"5c5a34e7ae9c362498d9b2161667bf06c15e3e48"}},
+  1}]}.
+[
+{pkg_hash,[
+ {<<"exometer_core">>, <<"F19461FAE97B3AA70B6D2D586EE8101152916CB7884B973516F1F82C224CF7AD">>},
+ {<<"hamcrest">>, <<"FB7B2C92D252A1E9DB936750B86089ADDAEBEB8F87967FB4BBDDA61E8863338E">>},
+ {<<"hut">>, <<"71F2F054E657C03F959CF1ACC43F436EA87580696528CA2A55C8AFB1B06C85E7">>},
+ {<<"parse_trans">>, <<"6E6AA8167CB44CC8F39441D05193BE6E6F4E7C2946CB2759F015F8C56B76E5FF">>},
+ {<<"poolboy">>, <<"392B007A1693A64540CEAD79830443ABF5762F5D30CF50BC95CB2C1AAAFA006B">>},
+ {<<"riak_pb">>, <<"48FFBF66DBB3F136AB9A7134BAC4E496754BAA5EF58C4F50A61326736D996390">>},
+ {<<"riakc">>, <<"6132D9E687A0DFD314B2B24C4594302CA8B55568A5D733C491D8FB6CD4004763">>},
+ {<<"setup">>, <<"05F69185A5EB71474C9BC6BA892565651EC7507791F85632B7B914DBFE130510">>}]},
+{pkg_hash_ext,[
+ {<<"exometer_core">>, <<"AEA333E830A33BE0D7BC60701BBDC899566DE9387A4DE8649412FCBD309633A4">>},
+ {<<"hamcrest">>, <<"26974025BC61BC09EF5B13BE5DCE5035CA11BF37BF4A865E9D86C455C942298F">>},
+ {<<"hut">>, <<"7E15D28555D8A1F2B5A3A931EC120AF0753E4853A4C66053DB354F35BF9AB563">>},
+ {<<"parse_trans">>, <<"620A406CE75DADA827B82E453C19CF06776BE266F5A67CFF34E1EF2CBB60E49A">>},
+ {<<"poolboy">>, <<"DAD79704CE5440F3D5A3681C8590B9DC25D1A561E8F5A9C995281012860901E3">>},
+ {<<"riak_pb">>, <<"7C0644BCBA8A423DD9C1AB85B6E7FF4DF0712D8A350F9698647CFF1996F0348C">>},
+ {<<"riakc">>, <<"32B3ACED7B749BFFD917153F68FA73C184B09B70EA6F37867DB43DBA273127BF">>},
+ {<<"setup">>, <<"EFD072578F0CF85BEA96CAAFFC7ADB0992398272522660A136E10567377071C5">>}]}
+].
