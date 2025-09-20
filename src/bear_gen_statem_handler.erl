@@ -37,7 +37,7 @@
 %%%===================================================================
 
 handoff(Id) ->
-  call(Id, handoff).
+  call(Id, {?MODULE, handoff}).
 
 call(Server, Command) when is_pid(Server) ->
   gen_statem:call(Server, Command);
@@ -85,9 +85,9 @@ init([Id, Module, Args]) ->
           {error, {failed_to_fetch_state, Error}}
       end;
     Pid ->
-      case catch gen_statem:call(Pid, {ready_to_receive, self()}) of
+      case catch gen_statem:call(Pid, {?MODULE, {ready_to_receive, self()}}) of
         ok ->
-          {ok, wait_for_handoff, undefined};
+          {ok, {?MODULE, wait_for_handoff}, undefined};
         _ ->
           {stop, already_started}
       end
@@ -108,56 +108,56 @@ callback_mode() ->
 %handle_event(enter, _, _, _State) ->
 %  keep_state_and_data;
 
-handle_event({call, From}, handoff, StateName, State = #state{}) ->
+handle_event({call, From}, {?MODULE, handoff}, StateName, State = #state{}) ->
   io:format(user, "[~p - ~p] handoff command received ~n", [State#state.id, self()]),
   gen_statem:reply(From, ok),
-  {next_state, {prepare_handoff, StateName}, State};
+  {next_state, {?MODULE, {prepare_handoff, StateName}}, State};
 
-handle_event(enter, _PrevState, {prepare_handoff, _StateName}, State) ->
+handle_event(enter, _PrevState, {?MODULE, {prepare_handoff, _StateName}}, State) ->
   {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
-handle_event({call, From}, {ready_to_receive, NewPid}, {prepare_handoff, StateName}, #state{} = State) ->
+handle_event({call, From}, {?MODULE, {ready_to_receive, NewPid}}, {?MODULE, {prepare_handoff, StateName}}, #state{} = State) ->
   gen_statem:reply(From, ok),
-  {next_state, {handoff, NewPid, StateName}, State};
-handle_event({call, From}, {ready_to_receive, _Pid}, _, #state{} = _State) ->
+  {next_state, {?MODULE, {handoff, NewPid, StateName}}, State};
+handle_event({call, From}, {?MODULE, {ready_to_receive, _Pid}}, _, #state{} = _State) ->
   gen_statem:reply(From, {error, not_in_handoff}),
   keep_state_and_data;
-handle_event(state_timeout, stop, {prepare_handoff, StateName}, #state{} = State) ->
+handle_event(state_timeout, stop, {?MODULE, {prepare_handoff, StateName}}, #state{} = State) ->
   io:format(user, "[~p - ~p] prepare handoff timeout ~n", [State#state.id, self()]),
   {next_state, StateName, State};
-handle_event(EventType, _EventContext, {prepare_handoff, _StateName}, _State) when EventType =/= enter ->
+handle_event(EventType, _EventContext, {?MODULE, {prepare_handoff, _StateName}}, _State) when EventType =/= enter ->
   % Postpone all the event until while in prepare handoff mode,
   % on timeout or entering handoff mode all the event will be replayed
   {keep_state_and_data, [postpone]};
 
 % handoff state
-handle_event(enter, _PrevState, {handoff, NewPid, StateName}, State) ->
+handle_event(enter, _PrevState, {?MODULE, {handoff, NewPid, StateName}}, State) ->
   io:format(user, "[~p - ~p] handoff to ~p~n", [State#state.id, self(), NewPid]),
-  ok = gen_statem:call(NewPid, {state_handoff, StateName, State}),
+  ok = gen_statem:call(NewPid, {?MODULE, {state_handoff, StateName, State}}),
   io:format(user, "[~p - ~p] state transferred to ~p~n", [State#state.id, self(), NewPid]),
   A = pes:update(State#state.id, NewPid),
   io:format(user, "pes: ~p~n", [A]),
   io:format(user, "[~p - ~p] pes catalog updated to ~p~n", [State#state.id, self(), NewPid]),
   {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
-handle_event(state_timeout, stop, {handoff, _, _}, #state{} = State) ->
+handle_event(state_timeout, stop, {?MODULE, {handoff, _, _}}, #state{} = State) ->
   {stop, normal, State};
-handle_event(EventType, EventContext, {handoff, NewPid, _}, _State) ->
+handle_event(EventType, EventContext, {?MODULE, {handoff, NewPid, _}}, _State) ->
   % transfer all the request to the new pid during the handoff event
-  NewPid ! {handoff, EventType, EventContext},
+  NewPid ! {?MODULE, {handoff, EventType, EventContext}},
   keep_state_and_data;
 
 % receive handoff
-handle_event(enter, _PrevState, wait_for_handoff, State) ->
+handle_event(enter, _PrevState, {?MODULE, wait_for_handoff}, State) ->
   {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
-handle_event({call, From}, {state_handoff, StateName, State}, wait_for_handoff, _State) ->
+handle_event({call, From}, {?MODULE, {state_handoff, StateName, State}}, {?MODULE, wait_for_handoff}, _State) ->
   io:format(user, "[~p - ~p] state received ~n", [State#state.id, self()]),
   {next_state, StateName, State, [{reply, From, ok}]};
-handle_event(state_timeout, stop, wait_for_handoff, #state{} = State) ->
+handle_event(state_timeout, stop, {?MODULE, wait_for_handoff}, #state{} = State) ->
   {stop, no_handoff_received, State};
-handle_event(EventType, _EventContext, wait_for_handoff, _State) when EventType =/= enter ->
+handle_event(EventType, _EventContext, {?MODULE, wait_for_handoff}, _State) when EventType =/= enter ->
   % postpone all the event until we received the handoff
   {keep_state_and_data, [postpone]};
 
-handle_event(info, {handoff, EventType, EventContext}, StateName, State) ->
+handle_event(info, {?MODULE, {handoff, EventType, EventContext}}, StateName, State) ->
   io:format(user, "[~p - ~p] got handoff event ~n", [State#state.id, self()]),
   handle_event(EventType, EventContext, StateName, State);
 
@@ -179,7 +179,7 @@ handle_event(EventType, EventContent, StateName, #state{module = Module, cb_data
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
-terminate(_Reason, {handoff, _}, _State) ->
+terminate(_Reason, {?MODULE, {handoff, _}}, _State) ->
   ok;
 terminate(Reason, StateName, State = #state{module = Module, stored = Obj, cb_data = CBData}) ->
   io:format(user, "[~p - ~p] terminated ~p~n", [State#state.id, self(), Reason]),

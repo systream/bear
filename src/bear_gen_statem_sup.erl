@@ -45,7 +45,7 @@ terminate_child(Id) ->
   end.
 
 start_handoff(Id, Module) ->
-  supervisor:start_child(?SERVER, child_spec(Id, Module)).
+  start_child(Id, Module, undefined).
 
 children() ->
   [{Id, Pid, Modules} ||
@@ -87,9 +87,6 @@ child_spec(Name, Module, Args) ->
   #{id => Name,
     start => {'bear_gen_statem_handler', start_link, [Name, Module, Args]},
     restart => transient,
-    shutdown => 5000,
+    shutdown => 250000,
     type => worker,
     modules => ['bear_gen_statem_handler', Module]}.
-
-child_spec(Name, Module) ->
-  child_spec(Name, Module, undefined).

@@ -36,7 +36,7 @@ start_link(_) ->
                                           {keyfile, filename:join([CertDir, "bear.key"])}
     ,
     {ssl_opts, [
-      {server_name_indication, "systream.hu"},
+      {server_name_indication, Host},
       {customize_hostname_check, [
         {match_fun, public_key:pkix_verify_hostname_match_fun(https)}
       ]}

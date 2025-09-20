@@ -44,6 +44,7 @@ start_link() ->
   {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([]) ->
+  erlang:process_flag(trap_exit, true),
   net_kernel:monitor_nodes(true),
   {ok, #state{}}.
 
@@ -76,6 +77,7 @@ handle_cast(_Request, State = #state{}) ->
   {noreply, NewState :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #state{}}).
 handle_info({nodeup, Node}, State = #state{}) ->
+  io:format(user, "nodeup: ~p~n", [Node]),
   % wait a but to have all the data replicated to the new nodes
   wait_until_app_started(Node, bear),
   timer:sleep(3000),
@@ -93,6 +95,7 @@ handle_info({nodedown, _Node}, State = #state{}) ->
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #state{}) -> term()).
 terminate(_Reason, _State = #state{}) ->
+  trigger_reallocate(current_nodes() -- [node()]),
   ok.
 
 %% @private
@@ -108,14 +111,24 @@ code_change(_OldVsn, State = #state{}, _Extra) ->
 %%%===================================================================
 
 on_node(Id) ->
-  Nodes = lists:sort(nodes([visible, this])),
+  on_node(Id, current_nodes()).
+
+on_node(Id, NodeList) ->
+  Nodes = lists:sort(NodeList),
   NodeLength = length(Nodes),
   lists:nth(erlang:phash2(Id, NodeLength) + 1, Nodes).
 
+current_nodes() ->
+  nodes([visible, this]).
+
 trigger_reallocate() ->
+  trigger_reallocate(current_nodes()).
+
+trigger_reallocate(NodeList) ->
   lists:foreach(fun({Id, Pid, [Module]}) ->
-                  case on_node(Id) of
+                  case on_node(Id, NodeList) of
                     Node when node() =:= Node ->
+                      io:format(user, "~p - ~p should stay on ~p ~n", [Id, Pid, Node]),
                       ok;
                     NewNode ->
                       io:format(user, "~p - ~p set to handoff mode ~n", [Id, Pid]),
