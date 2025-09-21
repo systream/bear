@@ -32,17 +32,11 @@ store(Bucket, Key, Data) ->
 
 -spec store(obj()) -> {ok, obj()} | {error, term()}.
 store(Obj) ->
-  Pid = bear_pool:checkout(),
-  Result = riakc_pb_socket:put(Pid, Obj, [return_body]),
-  bear_pool:checkin(Pid),
-  Result.
+  execute(fun riakc_pb_socket:put/3, [Obj, [return_body]]).
 
 -spec fetch(bucket(), key()) -> {ok, obj()} | not_found | {error, term()}.
 fetch(Bucket, Key) ->
-  Pid = bear_pool:checkout(),
-  Result = riakc_pb_socket:get(Pid, Bucket, Key),
-  bear_pool:checkin(Pid),
-  case Result of
+  case execute(fun riakc_pb_socket:get/3, [Bucket, Key]) of
     {error, notfound} ->
       not_found;
     Else ->
@@ -51,8 +45,7 @@ fetch(Bucket, Key) ->
 
 -spec remove(obj()) -> ok | {error, term()}.
 remove(Obj) ->
-  Pid = bear_pool:checkout(),
-  riakc_pb_socket:delete_obj(Pid, Obj).
+  execute(fun riakc_pb_socket:delete_obj/2, [Obj]).
 
 -spec value(obj()) -> data().
 value(Obj) ->
@@ -65,3 +58,22 @@ value(Obj, NewData) ->
 -spec new_obj(bucket(), key(), data()) -> obj().
 new_obj(Bucket, Key, Value) ->
   riakc_obj:new(Bucket, Key, Value).
+
+execute(Fun, Args) ->
+  Pid = bear_pool:checkout(),
+  MaxRetry = application:get_env(bear, max_retry, 2),
+  Result = retry_wrap(Fun, [Pid | Args], MaxRetry),
+  bear_pool:checkin(Pid),
+  Result.
+
+retry_wrap(Fun, Args, MaxRetry) ->
+  case apply(Fun, Args) of
+    {error, disconnected} when MaxRetry >= 0 ->
+      [Pid | RemArgs] = Args,
+      timer:sleep(rand:uniform(5)),
+      NewPid = bear_pool:checkout(),
+      bear_pool:checkin(Pid),
+      retry_wrap(Fun, [NewPid | RemArgs], MaxRetry-1);
+    Else ->
+      Else
+  end.

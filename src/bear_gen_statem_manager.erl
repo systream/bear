@@ -13,8 +13,7 @@
 -export([start_link/0, start_handler/3]).
 
 %% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
-  code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
 
 -define(SERVER, ?MODULE).
 
@@ -80,7 +79,7 @@ handle_info({nodeup, Node}, State = #state{}) ->
   io:format(user, "nodeup: ~p~n", [Node]),
   % wait a but to have all the data replicated to the new nodes
   wait_until_app_started(Node, bear),
-  timer:sleep(3000),
+  timer:sleep(15000),
   trigger_reallocate(),
   {noreply, State};
 handle_info({nodedown, _Node}, State = #state{}) ->
@@ -95,16 +94,9 @@ handle_info({nodedown, _Node}, State = #state{}) ->
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #state{}) -> term()).
 terminate(_Reason, _State = #state{}) ->
+  gen_server:multi_call(nodes(), ?SERVER, {leaving, node()}),
   trigger_reallocate(current_nodes() -- [node()]),
   ok.
-
-%% @private
-%% @doc Convert process state when code is changed
--spec(code_change(OldVsn :: term() | {down, term()}, State :: #state{},
-    Extra :: term()) ->
-  {ok, NewState :: #state{}} | {error, Reason :: term()}).
-code_change(_OldVsn, State = #state{}, _Extra) ->
-  {ok, State}.
 
 %%%===================================================================
 %%% Internal functions
@@ -114,30 +106,18 @@ on_node(Id) ->
   on_node(Id, current_nodes()).
 
 on_node(Id, NodeList) ->
-  Nodes = lists:sort(NodeList),
-  NodeLength = length(Nodes),
-  lists:nth(erlang:phash2(Id, NodeLength) + 1, Nodes).
+  NodeLength = length(NodeList),
+  lists:nth(erlang:phash2(Id, NodeLength) + 1, NodeList).
 
 current_nodes() ->
-  nodes([visible, this]).
+  lists:sort(nodes([visible, this])).
 
 trigger_reallocate() ->
   trigger_reallocate(current_nodes()).
 
 trigger_reallocate(NodeList) ->
   lists:foreach(fun({Id, Pid, [Module]}) ->
-                  case on_node(Id, NodeList) of
-                    Node when node() =:= Node ->
-                      io:format(user, "~p - ~p should stay on ~p ~n", [Id, Pid, Node]),
-                      ok;
-                    NewNode ->
-                      io:format(user, "~p - ~p set to handoff mode ~n", [Id, Pid]),
-                      ok = bear_gen_statem_handler:handoff(Pid),
-                      io:format(user, "~p should be reallocated to ~p~n", [Id, NewNode]),
-                      {ok, NewPid} = rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module]),
-                      io:format(user, "~p new server started ~p~n", [Id, NewPid]),
-                      timer:sleep(25)
-                  end
+                   do_handoff(Id, Pid, NodeList, Module)
                 end, bear_gen_statem_sup:children()).
 
 wait_until_app_started(OnNode, App) ->
@@ -147,4 +127,24 @@ wait_until_app_started(OnNode, App) ->
       wait_until_app_started(OnNode, App);
     _ ->
       ok
+  end.
+
+do_handoff(Id, Pid, NodeList, Module) ->
+  case on_node(Id, NodeList) of
+    Node when node() =:= Node ->
+      io:format(user, "~p - ~p should stay on ~p ~n", [Id, Pid, Node]),
+      ok;
+    NewNode ->
+      io:format(user, "~p should be reallocated to ~p~n", [Id, NewNode]),
+      io:format(user, "~p - ~p set to handoff mode ~n", [Id, Pid]),
+      case catch bear_gen_statem_handler:handoff(Pid) of
+        ok ->
+          {ok, NewPid} = rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module]),
+          io:format(user, "~p new server started ~p~n", [Id, NewPid]),
+          ok;
+        _ ->
+          % it means something wrong with this pid won't be able to handoff, lets just start
+          io:format(user, "~p Handoff failed, old pid died? ~p~n", [Id, Pid]),
+          ok
+      end
   end.

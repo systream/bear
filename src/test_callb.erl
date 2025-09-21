@@ -12,20 +12,89 @@
 -behaviour(bear).
 
 %% API
+-export([set_state/2, check/0,  start/2, connect/0]).
+
 -export([init/1, handle_event/4, terminate/3]).
 
+connect() ->
+  Node = node(),
+  case atom_to_list(Node) of
+    [$1 | Rem] -> %first node, than connect to the second one
+      pes:join(list_to_atom("2" ++ Rem));
+    [_ | Rem] ->
+      pes:join(list_to_atom("1" ++ Rem))
+  end.
 
-init(Args) ->
-  io:format(user, "init: ~p~n", [Args]),
+start(Num, Concurrency) ->
+  ItemPerNode = Num div Concurrency,
+  FirstNodeExtra = Num rem Concurrency,
+  spawn_monitor(fun() -> do_start(1, ItemPerNode+FirstNodeExtra) end),
+  StartItem = ItemPerNode+FirstNodeExtra,
+  lists:foldl(fun(_, IStartItem) ->
+                  spawn_monitor(fun() -> do_start(IStartItem+1, ItemPerNode) end),
+                  IStartItem+ItemPerNode
+              end, StartItem, lists:seq(2, Concurrency)).
+
+do_start(Start, Num) ->
+  io:format(user, "starting ~p -> ~p (~p)~n", [Start, Start+Num, Num]),
+  [bear_gen_statem_manager:start_handler(<<"test_", (id(I))/binary>>, test_callb, [I+I]) || I <- lists:seq(Start, Start+Num)].
+
+
+set_state(Num, Concurrency) ->
+  ItemPerNode = Num div Concurrency,
+  FirstNodeExtra = Num rem Concurrency,
+  spawn_monitor(fun() -> do_set_state(0, ItemPerNode+FirstNodeExtra) end),
+  StartItem = ItemPerNode+FirstNodeExtra,
+  lists:foldl(fun(_, IStartItem) ->
+    spawn_monitor(fun() -> do_set_state(IStartItem, ItemPerNode) end),
+    IStartItem+ItemPerNode
+              end, StartItem, lists:seq(1, Concurrency)).
+
+do_set_state(Start, Num) ->
+  [catch gen_statem:call({via, pes, <<"test_", (id(I))/binary>>}, {set, {node(), self(), erlang:unique_integer(), integer_to_binary(I+I*I)}}) || I <- lists:seq(Start, Start+Num)].
+
+check() ->
+  Nodes = nodes([this, visible]),
+  Result = lists:map(fun(Node) -> {Node, rpc:call(Node, bear_gen_statem_sup, children, [])} end, Nodes),
+  Diff = lists:map(fun({Node, Child}) ->
+              Ids = extract_ids(Child),
+              CompareAgainst = proplists:delete(Node, Result),
+              {Node, lists:map(fun({CNode, CChild}) ->
+                                    {CNode, same_elements(Ids, extract_ids(CChild))}
+                                  end, CompareAgainst)}
+              end, Result),
+  Counts = lists:map(fun({Node, C}) -> {Node, length(C)} end,  Result),
+  [{diff, Diff},
+   {counts, Counts},
+   {sum, lists:foldl(fun({_N, C}, A) -> C+A end, 0, Counts)}].
+
+extract_ids(Child) ->
+  lists:sort([Id || {Id, _, _} <- Child]).
+
+id(Num) ->
+  <<"test_", (integer_to_binary(Num))/binary>>.
+
+same_elements(L1, L2) ->
+  lists:foldl(fun(I, A) ->
+   case lists:member(I, L2) of
+     true ->
+       [I | A];
+     _ ->
+       A
+   end end, [], L1).
+
+
+init(_Args) ->
+  %io:format(user, "init: ~p~n", [_Args]),
   {ok, wait, #{}}.
 
 handle_event({call, From}, {set, NewData}, _CurrentState, _Data) ->
   io:format(user, "set ~p state to ~p~n", [self(), NewData]),
   {keep_state, NewData, [save, {reply, From, ok}]};
 
-handle_event(Event, EventContext, CurrentState, Data) ->
-  io:format(user, "event: ~p~nEventContect: ~p~nCStatte:~p~nData:~p~n***~n",
-    [Event, EventContext, CurrentState, Data]),
+handle_event(_Event, _EventContext, _CurrentState, _Data) ->
+  %io:format(user, "event: ~p~nEventContect: ~p~nCStatte:~p~nData:~p~n***~n",
+  %  [_Event, _EventContext, _CurrentState, _Data]),
   keep_state_and_data.
 
 terminate(Reason, CurrentState, Data) ->

@@ -85,11 +85,11 @@ init([Id, Module, Args]) ->
           {error, {failed_to_fetch_state, Error}}
       end;
     Pid ->
-      case catch gen_statem:call(Pid, {?MODULE, {ready_to_receive, self()}}) of
+      case catch gen_statem:call(Pid, {?MODULE, {ready_to_receive, self()}}, ?HANDOFF_TIMEOUT) of
         ok ->
           {ok, {?MODULE, wait_for_handoff}, undefined};
         _ ->
-          {stop, already_started}
+          {error, {already_started, Pid}}
       end
   end.
 
@@ -179,7 +179,8 @@ handle_event(EventType, EventContent, StateName, #state{module = Module, cb_data
 %% terminate. It should be the opposite of Module:init/1 and do any
 %% necessary cleaning up. When it returns, the gen_statem terminates with
 %% Reason. The return value is ignored.
-terminate(_Reason, {?MODULE, {handoff, _}}, _State) ->
+terminate(_Reason, {?MODULE, {handoff, _, _}}, _State) ->
+  % after handoff no need to clean the data from db
   ok;
 terminate(Reason, StateName, State = #state{module = Module, stored = Obj, cb_data = CBData}) ->
   io:format(user, "[~p - ~p] terminated ~p~n", [State#state.id, self(), Reason]),

@@ -26,15 +26,15 @@ start_link() ->
 %%                  type => worker(),       % optional
 %%                  modules => modules()}   % optional
 init([]) ->
-    SupFlags = #{strategy => one_for_all,
-                 intensity => 0,
-                 period => 1},
+    SupFlags = #{strategy => one_for_one,
+                 intensity => 30,
+                 period => 3},
     ChildSpecs = [
       bear_pool:child_spec(),
       #{id => bear_gen_statem_sup,
         start => {'bear_gen_statem_sup', start_link, []},
         restart => permanent,
-        shutdown => 300000,
+        shutdown => infinity,
         type => supervisor,
         modules => ['bear_gen_statem_sup','bear_gen_statem_handler']},
       #{id => bear_gen_statem_manager,
