@@ -69,6 +69,7 @@ execute(Fun, Args) ->
 retry_wrap(Fun, Args, MaxRetry) ->
   case apply(Fun, Args) of
     {error, disconnected} when MaxRetry >= 0 ->
+      logger:warning("No connection to riak, retry"),
       [Pid | RemArgs] = Args,
       timer:sleep(rand:uniform(5)),
       NewPid = bear_pool:checkout(),

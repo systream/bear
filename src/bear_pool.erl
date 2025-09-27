@@ -27,7 +27,7 @@ start_link(_) ->
   User = os:getenv("RIAK_USER", application:get_env(bear, riak_user, "bear")),
   Pass = os:getenv("RIAK_PW",  application:get_env(bear, riak_port, "bear")),
   CertDir = code:priv_dir(bear),
-  io:format(user, "User ~p connecting to ~p on ~p~n", [User, Host, Port]),
+  logger:info("User ~p connecting to ~p on ~p", [User, Host, Port]),
   riakc_pb_socket:start_link(Host, Port, [{auto_reconnect, true},
                                           {keepalive, true},
                                           {credentials, User, Pass},

@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, start_handler/3]).
+-export([start_link/0, start_handler/3, distribute_handlers/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2]).
@@ -26,6 +26,9 @@
 start_handler(Id, Module, Args) ->
   Node = on_node(Id),
   rpc:call(Node, bear_gen_statem_sup, start_child, [Id, Module, Args]).
+
+distribute_handlers() ->
+  gen_server:call(?SERVER, distribute_handlers, infinity).
 
 %% @doc Spawns the server and registers the local name (unique)
 -spec(start_link() ->
@@ -57,7 +60,8 @@ init([]) ->
   {noreply, NewState :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
   {stop, Reason :: term(), NewState :: #state{}}).
-handle_call(_Request, _From, State = #state{}) ->
+handle_call(distribute_handlers, _From, State = #state{}) ->
+  trigger_reallocate(),
   {reply, ok, State}.
 
 %% @private
@@ -76,14 +80,17 @@ handle_cast(_Request, State = #state{}) ->
   {noreply, NewState :: #state{}, timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: #state{}}).
 handle_info({nodeup, Node}, State = #state{}) ->
-  io:format(user, "nodeup: ~p~n", [Node]),
+  logger:info("Node ~p became online", [Node]),
   % wait a but to have all the data replicated to the new nodes
   wait_until_app_started(Node, bear),
-  timer:sleep(15000),
+  % wait that pes heal the data with heartbeat
+  % @TODO is this right?
+  timer:sleep(pes_cfg:heartbeat() + 100),
   trigger_reallocate(),
   {noreply, State};
-handle_info({nodedown, _Node}, State = #state{}) ->
+handle_info({nodedown, Node}, State = #state{}) ->
   % in case of down we do not know that it is a network split or a normal down, so do nothing
+  logger:debug("Node ~p become unavailable", [Node]),
   {noreply, State}.
 
 %% @private
@@ -94,7 +101,6 @@ handle_info({nodedown, _Node}, State = #state{}) ->
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #state{}) -> term()).
 terminate(_Reason, _State = #state{}) ->
-  gen_server:multi_call(nodes(), ?SERVER, {leaving, node()}),
   trigger_reallocate(current_nodes() -- [node()]),
   ok.
 
@@ -116,8 +122,10 @@ trigger_reallocate() ->
   trigger_reallocate(current_nodes()).
 
 trigger_reallocate(NodeList) ->
+  logger:debug("Reallocation triggered", []),
   lists:foreach(fun({Id, Pid, [Module]}) ->
-                   do_handoff(Id, Pid, NodeList, Module)
+                   do_handoff(Id, Pid, NodeList, Module),
+                   timer:sleep(length(NodeList) * 5)
                 end, bear_gen_statem_sup:children()).
 
 wait_until_app_started(OnNode, App) ->
@@ -132,19 +140,17 @@ wait_until_app_started(OnNode, App) ->
 do_handoff(Id, Pid, NodeList, Module) ->
   case on_node(Id, NodeList) of
     Node when node() =:= Node ->
-      io:format(user, "~p - ~p should stay on ~p ~n", [Id, Pid, Node]),
+      logger:debug("~ p should stay on ~p", [Id, Node]),
       ok;
     NewNode ->
-      io:format(user, "~p should be reallocated to ~p~n", [Id, NewNode]),
-      io:format(user, "~p - ~p set to handoff mode ~n", [Id, Pid]),
+      logger:info("~ p should be reallocated to ~p", [Id, NewNode]),
       case catch bear_gen_statem_handler:handoff(Pid) of
         ok ->
-          {ok, NewPid} = rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module]),
-          io:format(user, "~p new server started ~p~n", [Id, NewPid]),
+          {ok, _NewPid} = rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module]),
           ok;
-        _ ->
+        Reason ->
           % it means something wrong with this pid won't be able to handoff, lets just start
-          io:format(user, "~p Handoff failed, old pid died? ~p~n", [Id, Pid]),
+          logger:warning("Handoff failed for ~p, reason: ~p", [Id, Reason]),
           ok
       end
   end.
