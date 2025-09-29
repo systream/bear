@@ -13,7 +13,7 @@
 -define(BUCKET, <<"bear">>).
 
 %% API
--export([start_link/3, handoff/1]).
+-export([start_link/3, handoff/1, call/3]).
 
 %% gen_statem callbacks
 -export([init/1, handle_event/4, terminate/3, callback_mode/0]).
@@ -39,6 +39,7 @@
 handoff(Id) ->
   call(Id, {?MODULE, handoff}, ?HANDOFF_TIMEOUT).
 
+-spec call(pid() | term(), term(), pos_integer() | infinity) -> term().
 call(Server, Command, Timeout) when is_pid(Server) ->
   gen_statem:call(Server, Command, Timeout);
 call(Id, Command, Timeout) ->

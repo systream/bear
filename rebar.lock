@@ -8,7 +8,7 @@
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"3.4.1">>},2},
  {<<"pes">>,
   {git,"https://github.com/systream/pes.git",
-       {ref,"df56618c8ea09efe5afdf2a9b4a57c35d15a83b4"}},
+       {ref,"8677a405fda60425bfbc578e2cdb05e7b027938e"}},
   0},
  {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},0},
  {<<"protobuffs">>,
@@ -26,7 +26,7 @@
  {<<"setup">>,{pkg,<<"setup">>,<<"2.1.0">>},2},
  {<<"simple_gossip">>,
   {git,"https://github.com/systream/simple_gossip.git",
-       {ref,"5c5a34e7ae9c362498d9b2161667bf06c15e3e48"}},
+       {ref,"282ca8facee155098c134c1ddf5fa0150a705553"}},
   1}]}.
 [
 {pkg_hash,[

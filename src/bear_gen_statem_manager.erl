@@ -116,13 +116,13 @@ on_node(Id, NodeList) ->
   lists:nth(erlang:phash2(Id, NodeLength) + 1, NodeList).
 
 current_nodes() ->
-  lists:sort(nodes([visible, this])).
+  lists:sort(pes_cluster:live_nodes()).
 
 trigger_reallocate() ->
   trigger_reallocate(current_nodes()).
 
 trigger_reallocate(NodeList) ->
-  logger:debug("Reallocation triggered", []),
+  logger:info("Reallocation triggered", []),
   lists:foreach(fun({Id, Pid, [Module]}) ->
                    do_handoff(Id, Pid, NodeList, Module),
                    timer:sleep(length(NodeList) * 5)
