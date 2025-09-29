@@ -9,7 +9,7 @@
 
 -behaviour(gen_statem).
 
--define(HANDOFF_TIMEOUT, 15000).
+-define(HANDOFF_TIMEOUT, 60000).
 -define(BUCKET, <<"bear">>).
 
 %% API
@@ -124,8 +124,7 @@ callback_mode() ->
 %  keep_state_and_data;
 
 handle_event({call, From}, {?MODULE, handoff}, StateName, State = #state{}) ->
-  gen_statem:reply(From, ok),
-  {next_state, {?MODULE, {prepare_handoff, StateName}}, State};
+  {next_state, {?MODULE, {prepare_handoff, StateName}}, State, [{reply, From, ok}]};
 
 handle_event(enter, _PrevState, {?MODULE, {prepare_handoff, _StateName}}, State) ->
   {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
@@ -147,7 +146,7 @@ handle_event(EventType, _EventContext, {?MODULE, {prepare_handoff, _StateName}},
 handle_event(enter, _PrevState, {?MODULE, {handoff, NewPid, StateName}}, State) ->
   NewTargetNode = node(NewPid),
   logger:info("~p (~p) starging handoff to ~p (~p)", [State#state.id, State#state.module, NewPid, NewTargetNode]),
-  ok = gen_statem:call(NewPid, {?MODULE, {state_handoff, StateName, State}}),
+  ok = gen_statem:call(NewPid, {?MODULE, {state_handoff, StateName, State}}, ?HANDOFF_TIMEOUT),
   logger:info("~p (~p) state transfered to ~p (~p)", [State#state.id, State#state.module, NewPid, NewTargetNode]),
   CatalogResult = pes:update(State#state.id, NewPid),
   logger:debug("~p (~p) catalog updated to ~p (~p) with: ~p", [State#state.id, State#state.module, NewPid, NewTargetNode, CatalogResult]),
