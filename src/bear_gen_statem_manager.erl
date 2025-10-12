@@ -29,7 +29,7 @@
 -type node_name() :: node().
 -type state_machine_id() :: term().
 -type module_name() :: module().
--type state() :: #state{}.
+
 -type node_list() :: [node_name()].
 
 %% @doc Default timeout for gen_server calls (5 seconds).
@@ -45,6 +45,7 @@
 -define(SERVER, ?MODULE).
 
 -record(state, {}).
+-type state() :: #state{}.
 
 %%%===================================================================
 %%% API
@@ -82,7 +83,7 @@ start_link() ->
 %% @private
 %% @doc Initializes the server
 -spec(init(Args :: term()) ->
-  {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
+  {ok, State :: state()} | {ok, State :: state(), timeout() | hibernate} |
   {stop, Reason :: term()} | ignore).
 init([]) ->
   erlang:process_flag(trap_exit, true),
@@ -92,32 +93,32 @@ init([]) ->
 %% @private
 %% @doc Handling call messages
 -spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
-    State :: #state{}) ->
-  {reply, Reply :: term(), NewState :: #state{}} |
-  {reply, Reply :: term(), NewState :: #state{}, timeout() | hibernate} |
-  {noreply, NewState :: #state{}} |
-  {noreply, NewState :: #state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
-  {stop, Reason :: term(), NewState :: #state{}}).
+    State :: state()) ->
+  {reply, Reply :: term(), NewState :: state()} |
+  {reply, Reply :: term(), NewState :: state(), timeout() | hibernate} |
+  {noreply, NewState :: state()} |
+  {noreply, NewState :: state(), timeout() | hibernate} |
+  {stop, Reason :: term(), Reply :: term(), NewState :: state()} |
+  {stop, Reason :: term(), NewState :: state()}).
 handle_call(distribute_handlers, _From, State = #state{}) ->
   trigger_reallocate(),
   {reply, ok, State}.
 
 %% @private
 %% @doc Handling cast messages
--spec(handle_cast(Request :: term(), State :: #state{}) ->
-  {noreply, NewState :: #state{}} |
-  {noreply, NewState :: #state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), NewState :: #state{}}).
+-spec(handle_cast(Request :: term(), State :: state()) ->
+  {noreply, NewState :: state()} |
+  {noreply, NewState :: state(), timeout() | hibernate} |
+  {stop, Reason :: term(), NewState :: state()}).
 handle_cast(_Request, State = #state{}) ->
   {noreply, State}.
 
 %% @private
 %% @doc Handling all non call/cast messages
--spec(handle_info(Info :: timeout() | term(), State :: #state{}) ->
-  {noreply, NewState :: #state{}} |
-  {noreply, NewState :: #state{}, timeout() | hibernate} |
-  {stop, Reason :: term(), NewState :: #state{}}).
+-spec(handle_info(Info :: timeout() | term(), State ::state()) ->
+  {noreply, NewState :: state()} |
+  {noreply, NewState :: state(), timeout() | hibernate} |
+  {stop, Reason :: term(), NewState :: state()}).
 handle_info({nodeup, Node}, State = #state{}) ->
   logger:info("Node ~p became online", [Node]),
   % wait a but to have all the data replicated to the new nodes
@@ -182,9 +183,7 @@ trigger_reallocate() ->
 trigger_reallocate(NodeList) ->
   logger:info("Reallocation triggered", []),
   lists:foreach(fun({Id, Pid, [Module]}) ->
-                   do_handoff(Id, Pid, NodeList, Module),
-                   % Small delay to prevent overwhelming the cluster
-                   timer:sleep(length(NodeList) * 5)
+                   do_handoff(Id, Pid, NodeList, Module)
                 end, bear_gen_statem_sup:children()).
 
 %% @doc Waits until the specified application is running on the given node.
@@ -218,7 +217,10 @@ do_handoff(Id, Pid, NodeList, Module) ->
       case catch bear_gen_statem_handler:handoff(Pid) of
         ok ->
           case rpc:call(NewNode, bear_gen_statem_supervisor, start_handoff, [Id, Module], ?DEFAULT_TIMEOUT) of
-            {ok, _NewPid} -> ok;
+            {ok, _NewPid} ->
+              % Small delay to prevent overwhelming the cluster
+              timer:sleep(length(NodeList) * 5),
+              ok;
             {error, Reason} ->
               logger:error("Failed to start handoff for ~p on ~p: ~p", [Id, NewNode, Reason]),
               ok
