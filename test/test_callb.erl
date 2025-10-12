@@ -55,21 +55,35 @@ do_set_state(Start, Num) ->
 
 check() ->
   Nodes = nodes([this, visible]),
-  Result = lists:map(fun(Node) -> {Node, rpc:call(Node, bear_gen_statem_sup, children, [])} end, Nodes),
-  Diff = lists:map(fun({Node, Child}) ->
-              Ids = extract_ids(Child),
+  Result = pmap(fun(Node) ->
+    {Node,
+      extract_ids(rpc:call(Node, bear_gen_statem_sup, children, []))
+    } end, Nodes),
+  Diff = pmap(fun({Node, Ids}) ->
               CompareAgainst = proplists:delete(Node, Result),
-              {Node, lists:map(fun({CNode, CChild}) ->
-                                    {CNode, same_elements(Ids, extract_ids(CChild))}
+              {Node, lists:map(fun({CNode, CIds}) ->
+                                    {CNode, same_elements(Ids, CIds)}
                                   end, CompareAgainst)}
               end, Result),
-  Counts = lists:map(fun({Node, C}) -> {Node, length(C)} end,  Result),
+  Counts = pmap(fun({Node, C}) -> {Node, length(C)} end,  Result),
   [{diff, Diff},
    {counts, Counts},
    {sum, lists:foldl(fun({_N, C}, A) -> C+A end, 0, Counts)}].
 
 extract_ids(Child) ->
   lists:sort([Id || {Id, _, _} <- Child]).
+
+pmap(Fun, List) ->
+  S = self(),
+  Refs = [spawn_monitor(fun() -> S ! {self(), Fun(Item)} end) || Item <- List],
+  await(Refs, []).
+
+await([{Pid, _MRef} | Rest], Acc) ->
+  receive
+    {Pid, Res} -> await(Rest, [Res | Acc])
+  end;
+await([], Acc) ->
+  lists:reverse(Acc).
 
 id(Num) ->
   <<"test_", (integer_to_binary(Num))/binary>>.
