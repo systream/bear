@@ -216,7 +216,7 @@ do_handoff(Id, Pid, NodeList, Module) ->
       logger:info("~p should be reallocated to ~p", [Id, NewNode]),
       case catch bear_gen_statem_handler:handoff(Pid) of
         ok ->
-          case rpc:call(NewNode, bear_gen_statem_supervisor, start_handoff, [Id, Module], ?DEFAULT_TIMEOUT) of
+          case rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module], ?DEFAULT_TIMEOUT) of
             {ok, _NewPid} ->
               % Small delay to prevent overwhelming the cluster
               timer:sleep(length(NodeList) * 5),

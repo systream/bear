@@ -6,9 +6,13 @@
   {applications,
    [kernel,
     stdlib,
+    crypto,
+    sasl,
+    ssl,
     pes,
-    poolboy,
-    riakc
+    public_key,
+    riakc,
+    poolboy
    ]},
   {env,[]},
   {modules, []},
