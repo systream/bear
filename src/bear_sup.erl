@@ -30,7 +30,6 @@ init([]) ->
                  intensity => 30,
                  period => 3},
     ChildSpecs = [
-      bear_pool:child_spec(),
       #{id => bear_gen_statem_sup,
         start => {'bear_gen_statem_sup', start_link, []},
         restart => permanent,

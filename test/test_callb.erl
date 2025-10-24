@@ -97,7 +97,6 @@ same_elements(L1, L2) ->
        A
    end end, [], L1).
 
-
 init(_Args) ->
   %io:format(user, "init: ~p~n", [_Args]),
   {ok, wait, #{}}.

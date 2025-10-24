@@ -10,9 +10,7 @@
     sasl,
     ssl,
     pes,
-    public_key,
-    riakc,
-    poolboy
+    rico
    ]},
   {env,[]},
   {modules, []},

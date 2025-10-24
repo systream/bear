@@ -21,7 +21,7 @@
 -record(state, {
   id :: binary(),
   module :: module(),
-  stored :: bear_backend:obj() | undefined,
+  stored :: rico:obj() | undefined,
   cb_data :: term()
 }).
 
@@ -66,10 +66,10 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
   case pes:lookup(Id) of
     undefined ->
       yes = pes:register_name(Id, self()),
-      case bear_backend:fetch(?BUCKET, Id) of
+      case rico:fetch(?BUCKET, Id) of
         {ok, Obj} ->
           logger:debug("For ~p (~p) state found in backend", [Id, Module]),
-          #store_state{cb_data = CbData, state_name = StateName} = decode_stored_state(bear_backend:value(Obj)),
+          #store_state{cb_data = CbData, state_name = StateName} = decode_stored_state(rico:value(Obj)),
           Data = #state{id = Id, stored = Obj, module = Module, cb_data = CbData},
           %erlang:process_flag(trap_exit, true),
           logger:info("~p (~p) started from stored state", [Id, Module]),
@@ -233,7 +233,7 @@ terminate(Reason, {?MODULE, {handoff, _, _}}, State) ->
   ok;
 terminate(Reason, StateName, #state{module = Module, stored = Obj, cb_data = CBData} = State) ->
   Result = apply(Module, terminate, [Reason, StateName, CBData]),
-  ok = bear_backend:remove(Obj),
+  ok = rico:remove(Obj),
   logger:debug("~p (~p) terminated with ~p", [State#state.id, State#state.module, Reason]),
   Result;
 terminate(Reason, _StateName, undefined) ->
@@ -246,13 +246,13 @@ terminate(Reason, _StateName, undefined) ->
 
 save_state(StateName, #state{id = Id, stored = undefined, cb_data = Data} = State) ->
   SData = encode_stored_state(#store_state{state_name = StateName, cb_data = Data}),
-  NewObj = bear_backend:new_obj(?BUCKET, Id, SData),
-  {ok, StoredObj} = bear_backend:store(NewObj),
+  NewObj = rico:new_obj(?BUCKET, Id, SData),
+  {ok, StoredObj} = rico:store(NewObj),
   State#state{stored = StoredObj};
 save_state(StateName, #state{stored = Obj, cb_data = Data} = State) ->
   SData = encode_stored_state(#store_state{state_name = StateName, cb_data = Data}),
-  NewObj = bear_backend:value(Obj, SData),
-  {ok, StoredObj} = bear_backend:store(NewObj),
+  NewObj = rico:value(Obj, SData),
+  {ok, StoredObj} = rico:store(NewObj),
   State#state{stored = StoredObj}.
 
 encode_stored_state(State) ->

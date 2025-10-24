@@ -8,7 +8,7 @@
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"3.4.1">>},2},
  {<<"pes">>,
   {git,"https://github.com/systream/pes.git",
-       {ref,"5b63900cc4bfb96d3493903220c9333c6bef562a"}},
+       {ref,"56b24c47ae974c32a078113975faa3c0681776f4"}},
   0},
  {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},0},
  {<<"protobuffs">>,
@@ -23,10 +23,14 @@
   {git,"https://github.com/basho/riak-erlang-client.git",
        {ref,"3b6ad6e92dcb55833e9add829b2871be8468a68e"}},
   0},
+ {<<"rico">>,
+  {git,"https://github.com/systream/rico.git",
+       {ref,"ad01fc763bd393652f91d480050b8dc66098afa7"}},
+  0},
  {<<"setup">>,{pkg,<<"setup">>,<<"2.1.0">>},2},
  {<<"simple_gossip">>,
   {git,"https://github.com/systream/simple_gossip.git",
-       {ref,"109f001cdc32ce046d921ba40389328d52f114c3"}},
+       {ref,"c9a73a60ad3c211de918991e9c0afcd2b5a662d6"}},
   1}]}.
 [
 {pkg_hash,[
