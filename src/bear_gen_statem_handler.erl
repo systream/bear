@@ -73,6 +73,8 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
           Data = #state{id = Id, stored = Obj, module = Module, cb_data = CbData},
           %erlang:process_flag(trap_exit, true),
           logger:info("~p (~p) started from stored state", [Id, Module]),
+          bear_metrics:increase([statem, active]),
+          bear_metrics:count([statem, started]),
           {ok, StateName, Data};
         not_found ->
           case apply(Module, init, [Args]) of
@@ -80,11 +82,15 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
               State = #state{id = Id, module = Module, cb_data = Data},
               NewState = save_state(StateName, State),
               logger:info("~p (~p) started from initialzed state", [Id, Module]),
+              bear_metrics:increase([statem, active]),
+              bear_metrics:count([statem, started]),
               {ok, StateName, NewState, Actions};
             {ok, StateName, Data} ->
               State = #state{id = Id, module = Module, cb_data = Data},
               NewState = save_state(StateName, State),
               logger:info("~p (~p) started from initialzed state", [Id, Module]),
+              bear_metrics:increase([statem, active]),
+              bear_metrics:count([statem, started]),
               {ok, StateName, NewState}
           end;
         {error, Error} ->
@@ -166,6 +172,7 @@ handle_event({call, From}, {?MODULE, {state_handoff, StateName, State}}, {?MODUL
   {SourcePid, _} = From,
   SourcePidNode = node(SourcePid),
   logger:info("~p (~p) state received from ~p (~p)", [State#state.id, State#state.module, SourcePid, SourcePidNode]),
+  bear_metrics:count([statem, handoff]),
   {next_state, StateName, State, [{reply, From, ok}]};
 handle_event(state_timeout, stop, {?MODULE, wait_for_handoff}, #state{} = State) ->
   {stop, no_handoff_received, State};
@@ -230,14 +237,17 @@ handle_event(EventType, EventContent, StateName, #state{module = Module, cb_data
 terminate(Reason, {?MODULE, {handoff, _, _}}, State) ->
   % after handoff no need to clean the data from db
   logger:debug("~p (~p) terminated, was in handoff with ~p", [State#state.id, State#state.module, Reason]),
+  bear_metrics:decrease([statem, active]),
   ok;
 terminate(Reason, StateName, #state{module = Module, stored = Obj, cb_data = CBData} = State) ->
   Result = apply(Module, terminate, [Reason, StateName, CBData]),
   ok = rico:remove(Obj),
   logger:debug("~p (~p) terminated with ~p", [State#state.id, State#state.module, Reason]),
+  bear_metrics:decrease([statem, active]),
   Result;
 terminate(Reason, _StateName, undefined) ->
   logger:debug("State handler terminated with ~p", [Reason]),
+  bear_metrics:decrease([statem, active]),
   ok.
 
 %%%===================================================================
