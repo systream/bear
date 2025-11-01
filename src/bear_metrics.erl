@@ -47,5 +47,5 @@ stat() ->
   [
     {[statem, active], ActiveCount},
     {[statem, started], Started div (?SPIRAL_TIME_SPAN div 1000)},
-    {[statem, started], Handoff div (?SPIRAL_TIME_SPAN div 1000)}
+    {[statem, handoff], Handoff div (?SPIRAL_TIME_SPAN div 1000)}
   ].

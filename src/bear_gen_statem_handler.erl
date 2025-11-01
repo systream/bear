@@ -173,6 +173,7 @@ handle_event({call, From}, {?MODULE, {state_handoff, StateName, State}}, {?MODUL
   SourcePidNode = node(SourcePid),
   logger:info("~p (~p) state received from ~p (~p)", [State#state.id, State#state.module, SourcePid, SourcePidNode]),
   bear_metrics:count([statem, handoff]),
+  bear_metrics:increase([statem, started]),
   {next_state, StateName, State, [{reply, From, ok}]};
 handle_event(state_timeout, stop, {?MODULE, wait_for_handoff}, #state{} = State) ->
   {stop, no_handoff_received, State};

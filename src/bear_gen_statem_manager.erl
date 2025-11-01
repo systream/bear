@@ -180,6 +180,9 @@ trigger_reallocate() ->
 %% @doc Triggers reallocation of state machines to the specified nodes.
 %% @param NodeList List of target nodes for reallocation.
 -spec trigger_reallocate(NodeList :: node_list()) -> ok.
+trigger_reallocate([]) ->
+  logger:warning("Reallocation triggered, but nowhere to reloacte", []),
+  ok;
 trigger_reallocate(NodeList) ->
   logger:info("Reallocation triggered", []),
   lists:foreach(fun({Id, Pid, [Module]}) ->
