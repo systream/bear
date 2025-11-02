@@ -104,7 +104,7 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
           {ok, {?MODULE, wait_for_handoff}, undefined};
         Error ->
           logger:warning("~p (~p) started in handoff mode, but encountered an error ~p", [Id, Module, Error]),
-          {error, {already_started, Pid}}
+          ignore
       end;
     {error, no_consensus} when MaxRetry >= 0 ->
       logger:warning("could not lookup ~p no_consensus, wait and retry", [Id]),

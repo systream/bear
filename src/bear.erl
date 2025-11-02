@@ -19,6 +19,7 @@
     reply/1,
     distribute_handlers/0
 ]).
+-export([drain_node/1, undrain_node/1]).
 
 %% Type definitions
 -type state() :: term().
@@ -101,3 +102,11 @@ reply(Reply) ->
 -spec distribute_handlers() -> ok | {error, term()}.
 distribute_handlers() ->
     bear_gen_statem_manager:distribute_handlers().
+
+-spec drain_node(node()) -> ok.
+drain_node(Node) ->
+    bear_gen_statem_manager:drain_node(Node).
+
+-spec undrain_node(node()) -> ok.
+undrain_node(Node) ->
+  bear_gen_statem_manager:undrain_node(Node).

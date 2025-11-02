@@ -23,7 +23,8 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0, start_handler/3, distribute_handlers/0]).
+-export([start_link/0, start_handler/3, distribute_handlers/0, distribute_handlers/1,
+         drain_node/1, undrain_node/1]).
 
 %% Types
 -type node_name() :: node().
@@ -70,6 +71,35 @@ start_handler(Id, Module, Args) ->
 distribute_handlers() ->
   gen_server:call(?SERVER, distribute_handlers, infinity).
 
+-spec distribute_handlers([node()]) -> ok.
+distribute_handlers(Nodes) ->
+  gen_server:call(?SERVER, {distribute_handlers, Nodes}, infinity).
+
+-spec drain_node(node()) -> ok.
+drain_node(Node) ->
+  bear_cfg:add_node(drain_nodes, Node),
+  AllNodes = current_nodes(),
+  ActiveNodes = active_nodes(),
+  {_, []} =
+    gen_server:multi_call(AllNodes, ?SERVER, {distribute_handlers, ActiveNodes}, infinity),
+  ok.
+
+-spec undrain_node(node()) -> ok.
+undrain_node(Node) ->
+  bear_cfg:remove_node(drain_nodes, Node),
+  distribute_handlers_on_all_nodes(active_nodes()).
+
+-spec distribute_handlers_on_all_nodes([node()]) -> ok.
+distribute_handlers_on_all_nodes(ActiveNodes) ->
+  distribute_handlers_on_all_nodes(current_nodes(), ActiveNodes).
+
+-spec distribute_handlers_on_all_nodes([node()], [node()]) -> ok.
+distribute_handlers_on_all_nodes(Nodes, ActiveNodes) ->
+  {_, []} =
+    gen_server:multi_call(Nodes, ?SERVER, {distribute_handlers, ActiveNodes}, infinity),
+  ok.
+
+
 %% @doc Spawns the server and registers the local name (unique)
 -spec(start_link() ->
   {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
@@ -102,6 +132,9 @@ init([]) ->
   {stop, Reason :: term(), NewState :: state()}).
 handle_call(distribute_handlers, _From, State = #state{}) ->
   trigger_reallocate(),
+  {reply, ok, State};
+handle_call({distribute_handlers, Nodes}, _From, State = #state{}) ->
+  trigger_reallocate(Nodes),
   {reply, ok, State}.
 
 %% @private
@@ -141,7 +174,8 @@ handle_info({nodedown, Node}, State = #state{}) ->
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #state{}) -> term()).
 terminate(_Reason, _State = #state{}) ->
-  trigger_reallocate(current_nodes() -- [node()]),
+  trigger_reallocate(active_nodes() -- [node()]),
+  bear_cfg:remove_node(drain_nodes, node()),
   ok.
 
 %%%===================================================================
@@ -154,7 +188,7 @@ terminate(_Reason, _State = #state{}) ->
 %% @returns The node that should host this state machine.
 -spec on_node(Id :: state_machine_id()) -> node_name().
 on_node(Id) ->
-  on_node(Id, current_nodes()).
+  on_node(Id, active_nodes()).
 
 %% @doc Determines which node should host the state machine with the given ID
 %% from the specified node list.
@@ -172,10 +206,17 @@ on_node(Id, NodeList) ->
 current_nodes() ->
   lists:sort(pes_cluster:live_nodes()).
 
+%% @doc return with all the active nodes without the draining nodes
+%% @returns Sorted list of active nodes
+-spec active_nodes() -> node_list().
+active_nodes() ->
+  DrainNodes = bear_cfg:get(drain_nodes, []),
+  lists:filter(fun (Node) -> not lists:member(Node, DrainNodes) end, current_nodes()).
+
 %% @doc Triggers reallocation of state machines across all live nodes.
 %% @see trigger_reallocate/1
 trigger_reallocate() ->
-  trigger_reallocate(current_nodes()).
+  trigger_reallocate(active_nodes()).
 
 %% @doc Triggers reallocation of state machines to the specified nodes.
 %% @param NodeList List of target nodes for reallocation.

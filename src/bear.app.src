@@ -9,6 +9,7 @@
     crypto,
     sasl,
     ssl,
+    simple_gossip,
     pes,
     rico
    ]},
