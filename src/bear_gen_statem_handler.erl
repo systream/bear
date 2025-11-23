@@ -173,7 +173,8 @@ handle_event({call, From}, {?MODULE, {state_handoff, StateName, State}}, {?MODUL
   SourcePidNode = node(SourcePid),
   logger:info("~p (~p) state received from ~p (~p)", [State#state.id, State#state.module, SourcePid, SourcePidNode]),
   bear_metrics:count([statem, handoff]),
-  bear_metrics:increase([statem, started]),
+  bear_metrics:count([statem, started]),
+  bear_metrics:increase([statem, active]),
   {next_state, StateName, State, [{reply, From, ok}]};
 handle_event(state_timeout, stop, {?MODULE, wait_for_handoff}, #state{} = State) ->
   {stop, no_handoff_received, State};
@@ -238,7 +239,7 @@ handle_event(EventType, EventContent, StateName, #state{module = Module, cb_data
 terminate(Reason, {?MODULE, {handoff, _, _}}, State) ->
   % after handoff no need to clean the data from db
   logger:debug("~p (~p) terminated, was in handoff with ~p", [State#state.id, State#state.module, Reason]),
-  bear_metrics:decrease([statem, active]),
+  %bear_metrics:decrease([statem, active]),
   ok;
 terminate(Reason, StateName, #state{module = Module, stored = Obj, cb_data = CBData} = State) ->
   Result = apply(Module, terminate, [Reason, StateName, CBData]),

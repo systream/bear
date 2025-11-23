@@ -22,6 +22,8 @@
 
 -behaviour(gen_server).
 
+-define(DEFAULT_DIST_CHK_TIME, 185000).
+
 %% API
 -export([start_link/0, start_handler/3, distribute_handlers/0, distribute_handlers/1,
          drain_node/1, undrain_node/1]).
@@ -36,6 +38,10 @@
 %% @doc Default timeout for gen_server calls (5 seconds).
 -define(DEFAULT_TIMEOUT, 5000).
 
+-ifdef(TEST).
+-export([on_node/1, active_nodes/0]).
+-endif.
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -45,7 +51,9 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {}).
+-record(state, {
+  distribution_check_timer :: undefined | reference()
+}).
 -type state() :: #state{}.
 
 %%%===================================================================
@@ -78,11 +86,8 @@ distribute_handlers(Nodes) ->
 -spec drain_node(node()) -> ok.
 drain_node(Node) ->
   bear_cfg:add_node(drain_nodes, Node),
-  AllNodes = current_nodes(),
   ActiveNodes = active_nodes(),
-  {_, []} =
-    gen_server:multi_call(AllNodes, ?SERVER, {distribute_handlers, ActiveNodes}, infinity),
-  ok.
+  distribute_handlers_on_all_nodes(ActiveNodes).
 
 -spec undrain_node(node()) -> ok.
 undrain_node(Node) ->
@@ -118,7 +123,7 @@ start_link() ->
 init([]) ->
   erlang:process_flag(trap_exit, true),
   net_kernel:monitor_nodes(true),
-  {ok, #state{}}.
+  {ok, schedule_distribution_check(#state{})}.
 
 %% @private
 %% @doc Handling call messages
@@ -131,11 +136,13 @@ init([]) ->
   {stop, Reason :: term(), Reply :: term(), NewState :: state()} |
   {stop, Reason :: term(), NewState :: state()}).
 handle_call(distribute_handlers, _From, State = #state{}) ->
+  NewState = cancel_distribution_check(State),
   trigger_reallocate(),
-  {reply, ok, State};
+  {reply, ok, schedule_distribution_check(NewState)};
 handle_call({distribute_handlers, Nodes}, _From, State = #state{}) ->
+  NewState = cancel_distribution_check(State),
   trigger_reallocate(Nodes),
-  {reply, ok, State}.
+  {reply, ok, schedule_distribution_check(NewState)}.
 
 %% @private
 %% @doc Handling cast messages
@@ -154,17 +161,37 @@ handle_cast(_Request, State = #state{}) ->
   {stop, Reason :: term(), NewState :: state()}).
 handle_info({nodeup, Node}, State = #state{}) ->
   logger:info("Node ~p became online", [Node]),
+  NewState = cancel_distribution_check(State),
   % wait a but to have all the data replicated to the new nodes
   wait_until_app_started(Node, bear),
   % wait that pes heal the data with heartbeat
   % @TODO is this right?
   timer:sleep(pes_cfg:heartbeat() + 100),
   trigger_reallocate(),
-  {noreply, State};
+  {noreply, schedule_distribution_check(NewState)};
 handle_info({nodedown, Node}, State = #state{}) ->
   % in case of down we do not know that it is a network split or a normal down, so do nothing
   logger:debug("Node ~p become unavailable", [Node]),
-  {noreply, State}.
+  {noreply, State};
+handle_info(distribution_check, State = #state{}) ->
+  logger:debug("Distribution check", []),
+  CNodes = current_nodes(),
+  case rpc:multicall(CNodes, bear_gen_statem_sup, children, []) of
+    {Nodes, []} ->
+      case should_trigger_distribution(CNodes, Nodes) of
+        true ->
+          logger:info("Auto process distribute triggered", []),
+          trigger_reallocate(),
+          ok;
+        _ ->
+          logger:debug("No need to auto distribute processes", []),
+          ok
+      end;
+    _ ->
+      logger:warning("Error fetching data for distribution check", []),
+      ok
+  end,
+  {noreply, schedule_distribution_check(State)}.
 
 %% @private
 %% @doc This function is called by a gen_server when it is about to
@@ -173,10 +200,37 @@ handle_info({nodedown, Node}, State = #state{}) ->
 %% with Reason. The return value is ignored.
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
     State :: #state{}) -> term()).
-terminate(_Reason, _State = #state{}) ->
+terminate(_Reason, State = #state{}) ->
+  cancel_distribution_check(State),
   trigger_reallocate(active_nodes() -- [node()]),
   bear_cfg:remove_node(drain_nodes, node()),
   ok.
+
+
+should_trigger_distribution(CNodes, NodesProcess) ->
+  DistributionTolerancePercentage = 10,
+  NumberOfNodes = length(CNodes),
+  MidPercentage = 100 div NumberOfNodes,
+  MinPercentage = MidPercentage - DistributionTolerancePercentage,
+  MaxPercentage = MidPercentage + DistributionTolerancePercentage,
+
+  NodesCount = lists:map(fun length/1, NodesProcess),
+  Total = lists:sum(NodesCount),
+  NodesPercentage = lists:map(fun(C) -> erlang:round((C / Total) * 100)  end, NodesCount),
+  lists:all(fun(P) -> MinPercentage > P andalso MaxPercentage < P end, NodesPercentage).
+
+schedule_distribution_check(#state{distribution_check_timer = undefined} = State) ->
+  CheckTime = application:get_env(bear, distribution_check_time, ?DEFAULT_DIST_CHK_TIME),
+  Ref = erlang:send_after(CheckTime, self(), distribution_check),
+  State#state{distribution_check_timer = Ref};
+schedule_distribution_check(State) ->
+  schedule_distribution_check(cancel_distribution_check(State)).
+
+cancel_distribution_check(#state{distribution_check_timer = undefined} = State) ->
+  State;
+cancel_distribution_check(#state{distribution_check_timer = Ref} = State) ->
+  erlang:cancel_timer(Ref),
+  State#state{distribution_check_timer = undefined}.
 
 %%%===================================================================
 %%% Internal functions
