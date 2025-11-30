@@ -164,7 +164,7 @@ handle_event(state_timeout, stop, {?MODULE, {handoff, _, _}}, #state{} = State) 
 handle_event(EventType, EventContext, {?MODULE, {handoff, NewPid, _}}, _State) ->
   % transfer all the request to the new pid during the handoff event
   NewPid ! {?MODULE, {handoff, EventType, EventContext}},
-  keep_state_and_data;
+  {keep_state_and_data, [{state_timeout, ?WAIT_FOR_LATE_MSG_TIMEOUT, stop}]};
 
 % receive handoff
 handle_event(enter, _PrevState, {?MODULE, wait_for_handoff}, State) ->
