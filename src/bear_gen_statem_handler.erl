@@ -10,6 +10,7 @@
 -behaviour(gen_statem).
 
 -define(HANDOFF_TIMEOUT, 60000).
+-define(WAIT_FOR_LATE_MSG_TIMEOUT, 3000).
 -define(BUCKET, <<"bear">>).
 
 %% API
@@ -156,7 +157,7 @@ handle_event(enter, _PrevState, {?MODULE, {handoff, NewPid, StateName}}, State) 
   logger:info("~p (~p) state transfered to ~p (~p)", [State#state.id, State#state.module, NewPid, NewTargetNode]),
   CatalogResult = pes:update(State#state.id, NewPid),
   logger:debug("~p (~p) catalog updated to ~p (~p) with: ~p", [State#state.id, State#state.module, NewPid, NewTargetNode, CatalogResult]),
-  {keep_state, State, [{state_timeout, ?HANDOFF_TIMEOUT, stop}]};
+  {keep_state, State, [{state_timeout, ?WAIT_FOR_LATE_MSG_TIMEOUT, stop}]};
 handle_event(state_timeout, stop, {?MODULE, {handoff, _, _}}, #state{} = State) ->
   logger:debug("~p (~p) handoff timeout, stopping", [State#state.id, State#state.module]),
   {stop, normal, State};
@@ -185,7 +186,8 @@ handle_event(EventType, _EventContext, {?MODULE, wait_for_handoff}, _State) when
 handle_event(info, {?MODULE, {handoff, EventType, EventContext}}, StateName, State) ->
   handle_event(EventType, EventContext, StateName, State);
 
-handle_event(EventType, EventContent, StateName, #state{module = Module, cb_data = CBData} = State) ->
+handle_event(EventType, EventContent0, StateName, #state{module = Module, cb_data = CBData} = State) ->
+  EventContent = maybe_convert_content(EventType, EventContent0),
   case apply(Module, handle_event, [EventType, EventContent, StateName, CBData]) of
     keep_state_and_data ->
       keep_state_and_data;
@@ -243,7 +245,12 @@ terminate(Reason, {?MODULE, {handoff, _, _}}, State) ->
   ok;
 terminate(Reason, StateName, #state{module = Module, stored = Obj, cb_data = CBData} = State) ->
   Result = apply(Module, terminate, [Reason, StateName, CBData]),
-  ok = rico:remove(Obj),
+  case Result of
+    keep_data ->
+      ok;
+    _ ->
+      ok = rico:remove(Obj)
+  end,
   logger:debug("~p (~p) terminated with ~p", [State#state.id, State#state.module, Reason]),
   bear_metrics:decrease([statem, active]),
   Result;
@@ -280,3 +287,12 @@ process_actions(Actions, StateName, State) ->
     _ ->
       {ok, Actions, State}
   end.
+
+maybe_convert_content(enter, {?MODULE, wait_for_handoff}) ->
+  handoff;
+maybe_convert_content(enter, {?MODULE, {prepare_handoff, _}}) ->
+  handoff;
+maybe_convert_content(enter, {?MODULE, {handoff, _NewPid, _StateName}}) ->
+  handoff;
+maybe_convert_content(_EventType, EventContent) ->
+  EventContent.

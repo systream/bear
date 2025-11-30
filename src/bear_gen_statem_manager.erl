@@ -206,7 +206,6 @@ terminate(_Reason, State = #state{}) ->
   bear_cfg:remove_node(drain_nodes, node()),
   ok.
 
-
 should_trigger_distribution(CNodes, NodesProcess) ->
   DistributionTolerancePercentage = 10,
   NumberOfNodes = length(CNodes),
