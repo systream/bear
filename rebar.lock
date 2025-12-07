@@ -8,7 +8,7 @@
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"3.4.1">>},1},
  {<<"pes">>,
   {git,"https://github.com/systream/pes.git",
-       {ref,"28da803eefa28a30ba4b3975293eaf70b34280f1"}},
+       {ref,"ae3a6bc780045018dfba749adccd06262e12d1be"}},
   0},
  {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},1},
  {<<"protobuffs">>,
