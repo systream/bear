@@ -175,20 +175,14 @@ handle_info({nodedown, Node}, State = #state{}) ->
   {noreply, State};
 handle_info(distribution_check, State = #state{}) ->
   logger:debug("Distribution check", []),
-  CNodes = current_nodes(),
-  case rpc:multicall(CNodes, bear_gen_statem_sup, children, []) of
-    {Nodes, []} ->
-      case should_trigger_distribution(CNodes, Nodes) of
-        true ->
-          logger:info("Auto process distribute triggered", []),
-          trigger_reallocate(),
-          ok;
-        _ ->
-          logger:debug("No need to auto distribute processes", []),
-          ok
-      end;
+  Processes = bear_gen_statem_sup:children(),
+  case should_trigger_distribution(Processes, active_nodes()) of
+    true ->
+      logger:info("Auto process distribute triggered", []),
+      trigger_reallocate(),
+      ok;
     _ ->
-      logger:warning("Error fetching data for distribution check", []),
+      logger:debug("No need to auto distribute processes", []),
       ok
   end,
   {noreply, schedule_distribution_check(State)}.
@@ -206,17 +200,15 @@ terminate(_Reason, State = #state{}) ->
   bear_cfg:remove_node(drain_nodes, node()),
   ok.
 
-should_trigger_distribution(CNodes, NodesProcess) ->
+should_trigger_distribution(Processes, NodeList) ->
+  NodeDistribution = lists:foldl(fun(Id, Acc) ->
+                                   OnNode = on_node(Id, NodeList),
+                                   Acc#{OnNode => maps:get(on_node, Acc, 0) + 1}
+                                 end, #{}, Processes),
   DistributionTolerancePercentage = 10,
-  NumberOfNodes = length(CNodes),
-  MidPercentage = 100 div NumberOfNodes,
-  MinPercentage = MidPercentage - DistributionTolerancePercentage,
-  MaxPercentage = MidPercentage + DistributionTolerancePercentage,
-
-  NodesCount = lists:map(fun length/1, NodesProcess),
-  Total = lists:sum(NodesCount),
-  NodesPercentage = lists:map(fun(C) -> erlang:round((C / Total) * 100)  end, NodesCount),
-  lists:all(fun(P) -> MinPercentage > P andalso MaxPercentage < P end, NodesPercentage).
+  CurrentNodeLoad = maps:get(node(), NodeDistribution, 0),
+  Tolerance = max(100, (CurrentNodeLoad div 100) * DistributionTolerancePercentage),
+  lists:any(fun({_, Pc}) -> Pc > Tolerance end, maps:to_list(maps:remove(node, NodeDistribution))).
 
 schedule_distribution_check(#state{distribution_check_timer = undefined} = State) ->
   CheckTime = application:get_env(bear, distribution_check_time, ?DEFAULT_DIST_CHK_TIME),
