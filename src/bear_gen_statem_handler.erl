@@ -61,12 +61,11 @@ start_link(Id, Module, Args) ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init(InitArgs) ->
-  init(InitArgs, 100).
+  init(InitArgs, 30).
 
 init([Id, Module, Args] = InitArgs, MaxRetry) ->
-  case pes:lookup(Id) of
-    undefined ->
-      yes = pes:register_name(Id, self()),
+  case pes:register(Id, self()) of
+    registered ->
       case rico:fetch(?BUCKET, Id) of
         {ok, Obj} ->
           logger:debug("For ~p (~p) state found in backend", [Id, Module]),
@@ -98,17 +97,28 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
           logger:error("~p (~p) failed to fetch state because ~p", [Id, Module, Error]),
           {error, {failed_to_fetch_state, Error}}
       end;
-    {ok, {Pid, _GuardPid}} ->
+    {error, {already_registered, Pid}} ->
       case catch gen_statem:call(Pid, {?MODULE, {ready_to_receive, self()}}, ?HANDOFF_TIMEOUT) of
         ok ->
           logger:info("~p (~p) started in handoff mode", [Id, Module]),
           {ok, {?MODULE, wait_for_handoff}, undefined};
+        {error, not_in_handoff} ->
+          % process not in handoff mode so the handoff process has not started return with error already started;
+          {error, {already_started, Pid}};
+        {'EXIT', {noproc, _}} when MaxRetry >= 0 ->
+          % it seems that in the mean time the handoff has been done.
+          timer:sleep(100),
+          init(InitArgs, MaxRetry - 1);
         Error ->
           logger:warning("~p (~p) started in handoff mode, but encountered an error ~p", [Id, Module, Error]),
           ignore
       end;
-    {error, no_consensus} when MaxRetry >= 0 ->
-      logger:warning("could not lookup ~p no_consensus, wait and retry", [Id]),
+    {error, {could_not_register, Reason}} when MaxRetry >= 0 ->
+      logger:warning("could not lookup ~p ~p, wait and retry", [Id, Reason]),
+      timer:sleep(100),
+      init(InitArgs, MaxRetry - 1);
+    {error, timeout} when MaxRetry >= 0 ->
+      logger:warning("could not lookup ~p timeout, wait and retry", [Id]),
       timer:sleep(100),
       init(InitArgs, MaxRetry - 1);
     Else ->
@@ -152,7 +162,7 @@ handle_event(EventType, _EventContext, {?MODULE, {prepare_handoff, _StateName}},
 % handoff state
 handle_event(enter, _PrevState, {?MODULE, {handoff, NewPid, StateName}}, State) ->
   NewTargetNode = node(NewPid),
-  logger:info("~p (~p) starging handoff to ~p (~p)", [State#state.id, State#state.module, NewPid, NewTargetNode]),
+  logger:info("~p (~p) starting handoff to ~p (~p)", [State#state.id, State#state.module, NewPid, NewTargetNode]),
   ok = gen_statem:call(NewPid, {?MODULE, {state_handoff, StateName, State}}, ?HANDOFF_TIMEOUT),
   logger:info("~p (~p) state transfered to ~p (~p)", [State#state.id, State#state.module, NewPid, NewTargetNode]),
   CatalogResult = pes:update(State#state.id, NewPid),
