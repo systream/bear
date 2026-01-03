@@ -80,18 +80,17 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
           case apply(Module, init, [Args]) of
             {ok, StateName, Data, Actions} ->
               State = #state{id = Id, module = Module, cb_data = Data},
-              NewState = save_state(StateName, State),
+              {ok, NewActions, NewState} = process_actions(Actions, StateName, State),
               logger:info("~p (~p) started from initialzed state", [Id, Module]),
               bear_metrics:increase([statem, active]),
               bear_metrics:count([statem, started]),
-              {ok, StateName, NewState, Actions};
+              {ok, StateName, NewState, NewActions};
             {ok, StateName, Data} ->
               State = #state{id = Id, module = Module, cb_data = Data},
-              NewState = save_state(StateName, State),
               logger:info("~p (~p) started from initialzed state", [Id, Module]),
               bear_metrics:increase([statem, active]),
               bear_metrics:count([statem, started]),
-              {ok, StateName, NewState}
+              {ok, StateName, State}
           end;
         {error, Error} ->
           logger:error("~p (~p) failed to fetch state because ~p", [Id, Module, Error]),
@@ -274,15 +273,17 @@ terminate(Reason, _StateName, undefined) ->
 %%% Internal functions
 %%%===================================================================
 
-save_state(StateName, #state{id = Id, stored = undefined, cb_data = Data} = State) ->
+save_state(StateName, #state{id = Id, module = Module, stored = undefined, cb_data = Data} = State) ->
   SData = encode_stored_state(#store_state{state_name = StateName, cb_data = Data}),
   NewObj = rico:new_obj(?BUCKET, Id, SData),
   {ok, StoredObj} = rico:store(NewObj),
+  logger:debug("~p (~p) Object state stored", [Id, Module]),
   State#state{stored = StoredObj};
-save_state(StateName, #state{stored = Obj, cb_data = Data} = State) ->
+save_state(StateName, #state{id = Id, module = Module, stored = Obj, cb_data = Data} = State) ->
   SData = encode_stored_state(#store_state{state_name = StateName, cb_data = Data}),
   NewObj = rico:value(Obj, SData),
   {ok, StoredObj} = rico:store(NewObj),
+  logger:debug("~p (~p) Object state stored", [Id, Module]),
   State#state{stored = StoredObj}.
 
 encode_stored_state(State) ->
