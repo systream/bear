@@ -75,7 +75,7 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
           logger:info("~p (~p) started from stored state", [Id, Module]),
           bear_metrics:increase([statem, active]),
           bear_metrics:count([statem, started]),
-          {ok, StateName, Data};
+          {ok, StateName, Data, [{next_event, internal, {?MODULE, state_initialized}}]};
         not_found ->
           case apply(Module, init, [Args]) of
             {ok, StateName, Data, Actions} ->
@@ -195,7 +195,8 @@ handle_event(EventType, _EventContext, {?MODULE, wait_for_handoff}, _State) when
 
 handle_event(info, {?MODULE, {handoff, EventType, EventContext}}, StateName, State) ->
   handle_event(EventType, EventContext, StateName, State);
-
+handle_event(internal, {?MODULE, state_initialized}, StateName, State) ->
+  handle_event(enter, StateName, StateName, State);
 handle_event(EventType, EventContent0, StateName, #state{module = Module, cb_data = CBData} = State) ->
   EventContent = maybe_convert_content(EventType, EventContent0),
   case apply(Module, handle_event, [EventType, EventContent, StateName, CBData]) of
