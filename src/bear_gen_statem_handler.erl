@@ -61,7 +61,7 @@ start_link(Id, Module, Args) ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init(InitArgs) ->
-  init(InitArgs, 30).
+  init(InitArgs, 10).
 
 init([Id, Module, Args] = InitArgs, MaxRetry) ->
   case pes:register(Id, self()) of
