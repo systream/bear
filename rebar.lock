@@ -17,7 +17,7 @@
   1},
  {<<"rico">>,
   {git,"https://github.com/systream/rico.git",
-       {ref,"e30f551811ef7820b69687a9bb9e5b165d9f97b1"}},
+       {ref,"f92f181706f30179e9962baffd30439493c84b6f"}},
   0},
  {<<"setup">>,{pkg,<<"setup">>,<<"2.1.0">>},1},
  {<<"simple_gossip">>,

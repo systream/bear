@@ -26,7 +26,7 @@
   cb_data :: term()
 }).
 
-%-type state() :: #state{}.
+-type state() :: #state{}.
 
 -record(store_state, {
   cb_data :: term(),
@@ -66,7 +66,7 @@ init(InitArgs) ->
 init([Id, Module, Args] = InitArgs, MaxRetry) ->
   case pes:register(Id, self()) of
     registered ->
-      case rico:fetch(?BUCKET, Id) of
+      case rico:fetch(?BUCKET, state_key(Module, Id)) of
         {ok, Obj} ->
           logger:debug("For ~p (~p) state found in backend", [Id, Module]),
           #store_state{cb_data = CbData, state_name = StateName} = decode_stored_state(rico:value(Obj)),
@@ -275,7 +275,7 @@ terminate(Reason, _StateName, undefined) ->
 
 save_state(StateName, #state{id = Id, module = Module, stored = undefined, cb_data = Data} = State) ->
   SData = encode_stored_state(#store_state{state_name = StateName, cb_data = Data}),
-  NewObj = rico:new_obj(?BUCKET, Id, SData),
+  NewObj = rico:new_obj(?BUCKET, state_key(Module, Id), SData),
   {ok, StoredObj} = rico:store(NewObj),
   logger:debug("~p (~p) Object state stored", [Id, Module]),
   State#state{stored = StoredObj};
@@ -308,3 +308,7 @@ maybe_convert_content(enter, {?MODULE, {handoff, _NewPid, _StateName}}) ->
   handoff;
 maybe_convert_content(_EventType, EventContent) ->
   EventContent.
+
+-spec state_key(module(), term()) -> binary().
+state_key(Module, Id) ->
+  term_to_binary({Module, Id}).
