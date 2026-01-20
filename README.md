@@ -83,6 +83,30 @@ Stops the state machine identified by `Id`.
 
 Triggers a manual redistribution of handlers across the cluster. Useful after adding new nodes.
 
+### Persistence
+
+Bear integrates with Riak (via `rico`) for state persistence. You can control when the state is saved or removed.
+
+#### Saving State
+To save the current state to the persistent storage, return the atom `save` as one of the actions in your `handle_event` callback.
+
+```erlang
+handle_event({call, From}, update_data, _StateName, Data) ->
+    NewData = update(Data),
+    {keep_state, NewData, [{reply, From, ok}, save]}.
+```
+
+#### Terminating and Data Retention
+The return value of your `terminate/3` callback determines whether the state persists after the process stops.
+
+- **`keep_data`**: The state remains in the persistent store. Next time the process starts for this ID, it will reload this state.
+- **Any other value**: The state is removed from the persistent store.
+
+```erlang
+terminate(_Reason, _State, _Data) ->
+    keep_data. %% Persist state
+```
+
 ### Testing
 
 Run the test suite using rebar3:
