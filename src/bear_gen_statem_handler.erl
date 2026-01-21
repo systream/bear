@@ -124,7 +124,6 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
       {error, {lookup_error, Else}}
   end.
 
-
 %% @private
 %% @doc This function is called by a gen_statem when it needs to find out
 %% the callback mode of the callback module.

@@ -104,7 +104,6 @@ distribute_handlers_on_all_nodes(Nodes, ActiveNodes) ->
     gen_server:multi_call(Nodes, ?SERVER, {distribute_handlers, ActiveNodes}, infinity),
   ok.
 
-
 %% @doc Spawns the server and registers the local name (unique)
 -spec(start_link() ->
   {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
@@ -307,8 +306,6 @@ do_handoff(Id, Pid, NodeList, Module) ->
         ok ->
           case rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module], ?DEFAULT_TIMEOUT) of
             {ok, _NewPid} ->
-              % Small delay to prevent overwhelming the cluster
-              timer:sleep(length(NodeList) * 5),
               ok;
             {error, Reason} ->
               logger:error("Failed to start handoff for ~p on ~p: ~p", [Id, NewNode, Reason]),
