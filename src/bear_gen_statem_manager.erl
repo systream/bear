@@ -35,8 +35,7 @@
 
 -type node_list() :: [node_name()].
 
-%% @doc Default timeout for gen_server calls (5 seconds).
--define(DEFAULT_TIMEOUT, 5000).
+-define(START_HANDOFF_TIME, 30000).
 
 -ifdef(TEST).
 -export([on_node/1, active_nodes/0]).
@@ -304,7 +303,7 @@ do_handoff(Id, Pid, NodeList, Module) ->
       logger:info("~p should be reallocated to ~p", [Id, NewNode]),
       case catch bear_gen_statem_handler:handoff(Pid) of
         ok ->
-          case rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module], ?DEFAULT_TIMEOUT) of
+          case rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module], ?START_HANDOFF_TIME) of
             {ok, _NewPid} ->
               ok;
             {error, Reason} ->
