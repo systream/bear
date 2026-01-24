@@ -11,7 +11,7 @@
 
 -define(HANDOFF_TIMEOUT, 60000).
 -define(WAIT_FOR_LATE_MSG_TIMEOUT, 3000).
--define(BUCKET, <<"bear">>).
+-define(BUCKET, application:get_env(bear, statem_bucket, <<"bear">>)).
 
 %% API
 -export([start_link/3, handoff/1, call/3]).
@@ -66,7 +66,7 @@ init(InitArgs) ->
 init([Id, Module, Args] = InitArgs, MaxRetry) ->
   case pes:register(Id, self()) of
     registered ->
-      case rico:fetch(?BUCKET, state_key(Module, Id)) of
+      case rico:fetch(get_bucket(Module), state_key(Module, Id)) of
         {ok, Obj} ->
           logger:debug("For ~p (~p) state found in backend", [Id, Module]),
           #store_state{cb_data = CbData, state_name = StateName} = decode_stored_state(rico:value(Obj)),
@@ -106,6 +106,10 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
           {error, {already_started, Pid}};
         {'EXIT', {noproc, _}} when MaxRetry >= 0 ->
           % it seems that in the mean time the handoff has been done.
+          timer:sleep(100),
+          init(InitArgs, MaxRetry - 1);
+        {'EXIT', {{nodedown, _}, _}} ->
+          % it seems that then original process went down
           timer:sleep(100),
           init(InitArgs, MaxRetry - 1);
         Error ->
@@ -274,7 +278,7 @@ terminate(Reason, _StateName, undefined) ->
 
 save_state(StateName, #state{id = Id, module = Module, stored = undefined, cb_data = Data} = State) ->
   SData = encode_stored_state(#store_state{state_name = StateName, cb_data = Data}),
-  NewObj = rico:new_obj(?BUCKET, state_key(Module, Id), SData),
+  NewObj = rico:new_obj(get_bucket(Module), state_key(Module, Id), SData),
   {ok, StoredObj} = rico:store(NewObj),
   logger:debug("~p (~p) Object state stored", [Id, Module]),
   State#state{stored = StoredObj};
@@ -311,3 +315,12 @@ maybe_convert_content(_EventType, EventContent) ->
 -spec state_key(module(), term()) -> binary().
 state_key(Module, Id) ->
   term_to_binary({Module, Id}).
+
+-spec get_bucket(module()) -> rico:bucket().
+get_bucket(Module) ->
+  case erlang:function_exported(Module, bucket, 0) of
+    true ->
+      apply(Module, bucket, []);
+    _ ->
+      ?BUCKET
+  end.

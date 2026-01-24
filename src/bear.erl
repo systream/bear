@@ -35,6 +35,7 @@
 -type call_reply_action() :: {'reply', From :: term(), call_reply()}.
 
 %% Callback definitions
+-callback bucket() -> rico:bucket().
 -callback init(Args :: term()) -> init_result(state()).
 
 -callback handle_event(
@@ -55,6 +56,7 @@
     data()) ->
   any().
 
+-optional_callbacks([bucket/0]).
 %%%===================================================================
 %%% API
 %%%===================================================================
