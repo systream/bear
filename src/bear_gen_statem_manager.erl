@@ -309,10 +309,7 @@ do_handoff(Id, Pid, NodeList, Module) ->
             {error, Reason} ->
               logger:error("Failed to start handoff for ~p on ~p: ~p", [Id, NewNode, Reason]),
               ok
-          end;
-        Reason ->
-          logger:warning("Handoff failed for ~p, reason: ~p", [Id, Reason]),
-          ok
+          end
       catch Type:Error:Stacktrace ->
         logger:warning("Handoff crashed for ~p, ~p", [Id, {Type, Error, Stacktrace}]),
         ok
