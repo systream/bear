@@ -35,13 +35,13 @@ init([]) ->
         restart => permanent,
         shutdown => infinity,
         type => supervisor,
-        modules => ['bear_gen_statem_sup','bear_gen_statem_handler']},
+        modules => ['bear_gen_statem_sup', 'bear_gen_statem_handler']},
       #{id => bear_gen_statem_manager,
         start => {'bear_gen_statem_manager', start_link, []},
         restart => permanent,
         shutdown => 300000,
         type => worker,
-        modules => ['bear_gen_statem_manager', 'bear_gen_statem_sup','bear_gen_statem_handler']}
+        modules => ['bear_gen_statem_manager', 'bear_gen_statem_sup', 'bear_gen_statem_handler']}
     ],
     {ok, {SupFlags, ChildSpecs}}.
 

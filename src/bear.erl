@@ -30,7 +30,6 @@
 -type event_handler_result(State) :: gen_statem:event_handler_result(State).
 -type init_result(State) :: gen_statem:init_result(State).
 -type id() :: term().
--type timeout() :: non_neg_integer() | 'infinity'.
 -type call_reply() :: term().
 -type call_reply_action() :: {'reply', From :: term(), call_reply()}.
 
@@ -57,6 +56,8 @@
   any().
 
 -optional_callbacks([bucket/0]).
+
+-export_type([id/0, call_reply_action/0]).
 %%%===================================================================
 %%% API
 %%%===================================================================

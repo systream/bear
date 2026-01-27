@@ -153,7 +153,7 @@ handle_cast(_Request, State = #state{}) ->
 
 %% @private
 %% @doc Handling all non call/cast messages
--spec(handle_info(Info :: timeout() | term(), State ::state()) ->
+-spec(handle_info(Info :: timeout() | term(), State :: state()) ->
   {noreply, NewState :: state()} |
   {noreply, NewState :: state(), timeout() | hibernate} |
   {stop, Reason :: term(), NewState :: state()}).
@@ -191,7 +191,7 @@ handle_info(distribution_check, State = #state{}) ->
 %% necessary cleaning up. When it returns, the gen_server terminates
 %% with Reason. The return value is ignored.
 -spec(terminate(Reason :: (normal | shutdown | {shutdown, term()} | term()),
-    State :: #state{}) -> term()).
+    State :: state()) -> term()).
 terminate(_Reason, State = #state{}) ->
   cancel_distribution_check(State),
   trigger_reallocate(active_nodes() -- [node()]),
@@ -301,7 +301,7 @@ do_handoff(Id, Pid, NodeList, Module) ->
       ok;
     NewNode ->
       logger:info("~p should be reallocated to ~p", [Id, NewNode]),
-      case catch bear_gen_statem_handler:handoff(Pid) of
+      try bear_gen_statem_handler:handoff(Pid) of
         ok ->
           case rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module], ?START_HANDOFF_TIME) of
             {ok, _NewPid} ->
@@ -313,5 +313,8 @@ do_handoff(Id, Pid, NodeList, Module) ->
         Reason ->
           logger:warning("Handoff failed for ~p, reason: ~p", [Id, Reason]),
           ok
+      catch Type:Error:Stacktrace ->
+        logger:warning("Handoff crashed for ~p, ~p", [Id, {Type, Error, Stacktrace}]),
+        ok
       end
   end.

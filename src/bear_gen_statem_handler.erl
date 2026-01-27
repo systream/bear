@@ -37,6 +37,7 @@
 %%% API
 %%%===================================================================
 
+-spec handoff(pid() | term()) -> ok.
 handoff(Id) ->
   call(Id, {?MODULE, handoff}, ?HANDOFF_TIMEOUT).
 
@@ -69,8 +70,8 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
       case rico:fetch(get_bucket(Module), state_key(Module, Id)) of
         {ok, Obj} ->
           logger:debug("For ~p (~p) state found in backend", [Id, Module]),
-          #store_state{cb_data = CbData, state_name = StateName} = decode_stored_state(rico:value(Obj)),
-          Data = #state{id = Id, stored = Obj, module = Module, cb_data = CbData},
+          #store_state{cb_data = CBData, state_name = StateName} = decode_stored_state(rico:value(Obj)),
+          Data = #state{id = Id, stored = Obj, module = Module, cb_data = CBData},
           %erlang:process_flag(trap_exit, true),
           logger:info("~p (~p) started from stored state", [Id, Module]),
           bear_metrics:increase([statem, active]),
@@ -142,7 +143,7 @@ callback_mode() ->
 %handle_event(enter, _, _, _State) ->
 %  keep_state_and_data;
 
-handle_event({call, From}, {?MODULE, handoff}, StateName, State = #state{}) ->
+handle_event({call, From}, {?MODULE, handoff}, StateName,  #state{} = State) ->
   {next_state, {?MODULE, {prepare_handoff, StateName}}, State, [{reply, From, ok}]};
 
 handle_event(enter, _PrevState, {?MODULE, {prepare_handoff, _StateName}}, State) ->

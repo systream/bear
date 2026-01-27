@@ -1,6 +1,6 @@
 {application, bear,
- [{description, "An OTP application"},
-  {vsn, "0.1.0"},
+ [{description, "Bear is a distributed state machine manager"},
+  {vsn, git},
   {registered, []},
   {mod, {bear_app, []}},
   {applications,
@@ -11,7 +11,8 @@
     ssl,
     simple_gossip,
     pes,
-    rico
+    rico,
+    exometer_core
    ]},
   {env,[]},
   {modules, []},
