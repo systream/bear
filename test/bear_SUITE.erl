@@ -55,7 +55,7 @@ init_per_suite(Config) ->
     [{rico_mock_keeper, Keeper} | Config].
 
 end_per_suite(Config) ->
-    [bear:stop(Id) || {Id, _Pid, _Module} <- bear_gen_statem_sup:children()],
+    [bear:stop(Id) || {Id, _Pid, _Module} <- bear_gen_statem_super_sup:children()],
     ?config(rico_mock_keeper, Config) ! stop,
     meck:unload(rico),
     application:stop(pes),

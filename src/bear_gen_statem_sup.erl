@@ -10,52 +10,46 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0,
-         start_child/3,
-         children/0,
-         start_handoff/2,
-         terminate_child/1]).
+-export([start_link/1,
+         start_child/4,
+         children/1,
+         terminate_child/2]).
 
 %% Supervisor callbacks
 -export([init/1]).
-
--define(SERVER, ?MODULE).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
-start_child(Id, Module, Args) ->
-  case supervisor:start_child(?SERVER, child_spec(Id, Module, Args)) of
+start_child(Server, Id, Module, Args) ->
+  case supervisor:start_child(Server, child_spec(Id, Module, Args)) of
     {error, already_present} ->
-      supervisor:delete_child(?SERVER, Id),
-      start_child(Id, Module, Args);
+      supervisor:delete_child(Server, Id),
+      start_child(Server, Id, Module, Args);
     {error, {already_started, Pid}} ->
       {ok, Pid};
     Else ->
       Else
   end.
 
-terminate_child(Id) ->
-  case supervisor:terminate_child(?SERVER, Id) of
+terminate_child(Server, Id) ->
+  case supervisor:terminate_child(Server, Id) of
     ok ->
-      supervisor:delete_child(?SERVER, Id);
+      supervisor:delete_child(Server, Id);
     Else ->
       Else
   end.
 
-start_handoff(Id, Module) ->
-  start_child(Id, Module, undefined).
-
-children() ->
+children(Server) ->
   [{Id, Pid, Modules} ||
     {Id, Pid, worker, [bear_gen_statem_handler | Modules]}
-      <- supervisor:which_children(?SERVER), Pid =/= undefined].
+      <- supervisor:which_children(Server), Pid =/= undefined].
 
 %% @doc Starts the supervisor
--spec(start_link() -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
-start_link() ->
-  supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+-spec(start_link(atom()) -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
+start_link(Id) ->
+  supervisor:start_link({local, Id}, ?MODULE, []).
 
 %%%===================================================================
 %%% Supervisor callbacks

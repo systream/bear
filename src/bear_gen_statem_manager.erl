@@ -68,7 +68,7 @@
         {ok, pid()} | {error, term()}.
 start_handler(Id, Module, Args) ->
   Node = on_node(Id),
-  rpc:call(Node, bear_gen_statem_sup, start_child, [Id, Module, Args]).
+  rpc:call(Node, bear_gen_statem_super_sup, start_child, [Id, Module, Args]).
 
 %% @doc Triggers redistribution of state machines across available nodes.
 %% This function is typically called when the cluster topology changes
@@ -173,7 +173,7 @@ handle_info({nodedown, Node}, State = #state{}) ->
   {noreply, State};
 handle_info(distribution_check, State = #state{}) ->
   logger:debug("Distribution check", []),
-  Processes = bear_gen_statem_sup:children(),
+  Processes = bear_gen_statem_super_sup:children(),
   case should_trigger_distribution(Processes, active_nodes()) of
     true ->
       logger:info("Auto process distribute triggered", []),
@@ -199,7 +199,7 @@ terminate(_Reason, State = #state{}) ->
   ok.
 
 should_trigger_distribution(Processes, NodeList) ->
-  NodeDistribution = lists:foldl(fun(Id, Acc) ->
+  NodeDistribution = lists:foldl(fun({Id, _Pid, _Modules}, Acc) ->
                                    OnNode = on_node(Id, NodeList),
                                    Acc#{OnNode => maps:get(on_node, Acc, 0) + 1}
                                  end, #{}, Processes),
@@ -271,7 +271,7 @@ trigger_reallocate(NodeList) ->
   logger:info("Reallocation triggered", []),
   lists:foreach(fun({Id, Pid, [Module]}) ->
                    do_handoff(Id, Pid, NodeList, Module)
-                end, bear_gen_statem_sup:children()).
+                end, bear_gen_statem_super_sup:children()).
 
 %% @doc Waits until the specified application is running on the given node.
 %% @param OnNode The node to check.
@@ -303,14 +303,17 @@ do_handoff(Id, Pid, NodeList, Module) ->
       logger:info("~p should be reallocated to ~p", [Id, NewNode]),
       try bear_gen_statem_handler:handoff(Pid) of
         ok ->
-          case rpc:call(NewNode, bear_gen_statem_sup, start_handoff, [Id, Module], ?START_HANDOFF_TIME) of
+          case rpc:call(NewNode, bear_gen_statem_super_sup, start_handoff, [Id, Module], ?START_HANDOFF_TIME) of
             {ok, _NewPid} ->
               ok;
             {error, Reason} ->
               logger:error("Failed to start handoff for ~p on ~p: ~p", [Id, NewNode, Reason]),
               ok
           end
-      catch Type:Error:Stacktrace ->
+      catch
+        exit:{noproc, _}:_ ->  % at the mean time the process gone, it is a normal phenomenon
+          ok;
+        Type:Error:Stacktrace ->
         logger:warning("Handoff crashed for ~p, ~p", [Id, {Type, Error, Stacktrace}]),
         ok
       end

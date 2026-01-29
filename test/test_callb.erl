@@ -57,7 +57,7 @@ check() ->
   Nodes = nodes([this, visible]),
   Result = pmap(fun(Node) ->
     {Node,
-      extract_ids(rpc:call(Node, bear_gen_statem_sup, children, []))
+      extract_ids(rpc:call(Node, bear_gen_statem_super_sup, children, []))
     } end, Nodes),
   Diff = pmap(fun({Node, Ids}) ->
               CompareAgainst = proplists:delete(Node, Result),
