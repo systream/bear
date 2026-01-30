@@ -80,7 +80,7 @@ init([]) ->
 child_spec(Name, Module, Args) ->
   #{id => Name,
     start => {'bear_gen_statem_handler', start_link, [Name, Module, Args]},
-    restart => transient,
+    restart => temporary,
     shutdown => 250000,
     type => worker,
     modules => ['bear_gen_statem_handler', Module]}.
