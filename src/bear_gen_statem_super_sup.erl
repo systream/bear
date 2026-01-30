@@ -68,7 +68,7 @@ init([]) ->
 %%%===================================================================
 -spec get_supervisor_for_id(term()) -> atom().
 get_supervisor_for_id(Id) ->
-  get_shard_name(erlang:phash2(Id, get_shard_count())).
+  get_shard_name(erlang:phash2(Id, get_shard_count()) + 1).
 
 get_shard_count() ->
   application:get_env(bear, supervisor_shard_count, 16).
