@@ -69,8 +69,7 @@
 -spec start_handler(Id :: state_machine_id(), Module :: module_name(), Args :: term()) ->
         {ok, pid()} | {error, term()}.
 start_handler(Id, Module, Args) ->
-  Node = on_node(Id),
-  rpc:call(Node, bear_gen_statem_super_sup, start_child, [Id, Module, Args]).
+  erpc:call(on_node(Id), bear_gen_statem_super_sup, start_child, [Id, Module, Args]).
 
 %% @doc Triggers redistribution of state machines across available nodes.
 %% This function is typically called when the cluster topology changes
@@ -241,7 +240,8 @@ on_node(Id) ->
 %% @param NodeList List of available nodes.
 %% @returns The node that should host this state machine.
 -spec on_node(Id :: state_machine_id(), NodeList :: node_list()) -> node_name().
-on_node(Id, NodeList) ->
+on_node(Id, NodeList0) ->
+  NodeList = lists:sort(NodeList0),
   NodeLength = length(NodeList),
   lists:nth(erlang:phash2(Id, NodeLength) + 1, NodeList).
 
@@ -249,7 +249,7 @@ on_node(Id, NodeList) ->
 %% @returns Sorted list of live nodes.
 -spec current_nodes() -> node_list().
 current_nodes() ->
-  lists:sort(pes:live_nodes()).
+  pes:live_nodes().
 
 %% @doc return with all the active nodes without the draining nodes
 %% @returns Sorted list of active nodes

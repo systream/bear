@@ -62,7 +62,7 @@ start_link(Id, Module, Args) ->
 %% gen_statem:start_link/[3,4], this function is called by the new
 %% process to initialize.
 init(InitArgs) ->
-  init(InitArgs, 10).
+  init(InitArgs, 3).
 
 init([Id, Module, Args] = InitArgs, MaxRetry) ->
   case pes:register(Id, self()) of
@@ -109,7 +109,7 @@ init([Id, Module, Args] = InitArgs, MaxRetry) ->
           % it seems that in the mean time the handoff has been done.
           timer:sleep(100),
           init(InitArgs, MaxRetry - 1);
-        {'EXIT', {{nodedown, _}, _}} ->
+        {'EXIT', {{nodedown, _}, _}} when MaxRetry >= 0 ->
           % it seems that then original process went down
           timer:sleep(100),
           init(InitArgs, MaxRetry - 1);

@@ -128,7 +128,7 @@ status() ->
   DrainNodes = bear_gen_statem_manager:drain_nodes(),
   ProcessDistribution =
     bear_pmap:execute(fun(Node) ->
-                        {Node, rpc:call(Node, bear_gen_statem_super_sup, children_count, [])}
+                        {Node, erpc:call(Node, bear_gen_statem_super_sup, children_count, [], 30000)}
                       end, LiveClusterNodes),
   Total = lists:foldl(fun({_, Count}, Acc) when is_number(Count) ->
                         Count + Acc;
