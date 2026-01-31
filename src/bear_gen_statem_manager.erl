@@ -38,8 +38,10 @@
 -define(START_HANDOFF_TIME, 30000).
 
 -ifdef(TEST).
--export([on_node/1, active_nodes/0]).
+-export([on_node/1]).
 -endif.
+
+-export([active_nodes/0, drain_nodes/0]).
 
 %%%===================================================================
 %%% API
@@ -247,14 +249,18 @@ on_node(Id, NodeList) ->
 %% @returns Sorted list of live nodes.
 -spec current_nodes() -> node_list().
 current_nodes() ->
-  lists:sort(pes_cluster:live_nodes()).
+  lists:sort(pes:live_nodes()).
 
 %% @doc return with all the active nodes without the draining nodes
 %% @returns Sorted list of active nodes
 -spec active_nodes() -> node_list().
 active_nodes() ->
-  DrainNodes = bear_cfg:get(drain_nodes, []),
+  DrainNodes = drain_nodes(),
   lists:filter(fun (Node) -> not lists:member(Node, DrainNodes) end, current_nodes()).
+
+-spec drain_nodes() -> [node()].
+drain_nodes() ->
+  bear_cfg:get(drain_nodes, []).
 
 %% @doc Triggers reallocation of state machines across all live nodes.
 %% @see trigger_reallocate/1
@@ -303,7 +309,7 @@ do_handoff(Id, Pid, NodeList, Module) ->
       logger:info("~p should be reallocated to ~p", [Id, NewNode]),
       try bear_gen_statem_handler:handoff(Pid) of
         ok ->
-          case rpc:call(NewNode, bear_gen_statem_super_sup, start_handoff, [Id, Module], ?START_HANDOFF_TIME) of
+          case erpc:call(NewNode, bear_gen_statem_super_sup, start_handoff, [Id, Module], ?START_HANDOFF_TIME) of
             {ok, _NewPid} ->
               ok;
             {error, Reason} ->

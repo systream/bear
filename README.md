@@ -83,6 +83,29 @@ Stops the state machine identified by `Id`.
 
 Triggers a manual redistribution of handlers across the cluster. Useful after adding new nodes.
 
+#### `bear:status()`
+
+Returns the current status of the cluster, including node membership and process distribution.
+
+Returns a map containing:
+- `cluster`: Information about nodes (all known nodes, active nodes, dead nodes, draining nodes).
+- `distribution`: A map showing the number of handlers on each node.
+- `total`: Total number of handlers in the cluster.
+
+Example output:
+
+```erlang
+#{cluster =>
+      #{active_nodes => ['node1@host', 'node2@host'],
+        dead_nodes => [],
+        drain_nodes => [],
+        nodes => ['node1@host', 'node2@host']},
+  distribution => #{'node1@host' => 150, 'node2@host' => 150},
+  total => 300}
+```
+
+
+
 ### Persistence
 
 Bear integrates with Riak (via `rico`) for state persistence. You can control when the state is saved or removed.

@@ -5,7 +5,7 @@
 %% API
 -export([start_link/0,
           start_child/3,
-          children/0,
+          children/0, children_count/0,
           start_handoff/2,
           terminate_child/1]).
 
@@ -29,6 +29,11 @@ start_handoff(Id, Module) ->
 
 children() ->
   lists:flatten([bear_gen_statem_sup:children(Server) || Server <- get_servers()]).
+
+children_count() ->
+  lists:foldl(fun(Server, Acc) ->
+            length(bear_gen_statem_sup:children(Server)) + Acc
+              end, 0, get_servers()).
 
 %% @doc Starts the supervisor
 -spec(start_link() -> {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).

@@ -12,13 +12,14 @@
 -define(DEFAULT_TIMEOUT, 5000).
 
 -export([
-    start_link/3,
-    call/2, call/3,
-    cast/2,
-    stop/1, stop/2,
-    reply/1,
-    distribute_handlers/0
-]).
+  start_link/3,
+  call/2, call/3,
+  cast/2,
+  stop/1, stop/2,
+  reply/1,
+  distribute_handlers/0,
+  status/0]).
+
 -export([drain_node/1, undrain_node/1]).
 
 %% Type definitions
@@ -113,3 +114,30 @@ drain_node(Node) ->
 -spec undrain_node(node()) -> ok.
 undrain_node(Node) ->
   bear_gen_statem_manager:undrain_node(Node).
+
+-spec status() -> #{'distribution' => #{node() => neg_integer()},
+                    'total' => non_neg_integer(),
+                    cluster => #{nodes => [node()],
+                                dead_nodes => [node()],
+                                active_nodes => [node()],
+                                drain_nodes => [node()]}}.
+status() ->
+  ClusterNodes = pes:nodes(),
+  LiveClusterNodes = pes:live_nodes(),
+  Nodes = bear_gen_statem_manager:active_nodes(),
+  DrainNodes = bear_gen_statem_manager:drain_nodes(),
+  ProcessDistribution =
+    bear_pmap:execute(fun(Node) ->
+                        {Node, rpc:call(Node, bear_gen_statem_super_sup, children_count, [])}
+                      end, LiveClusterNodes),
+  Total = lists:foldl(fun({_, Count}, Acc) when is_number(Count) ->
+                        Count + Acc;
+                         (_, Acc) -> Acc
+                      end, 0, ProcessDistribution),
+  #{cluster => #{nodes => ClusterNodes,
+                 dead_nodes => ClusterNodes -- LiveClusterNodes,
+                 active_nodes => Nodes,
+                 drain_nodes => DrainNodes},
+    distribution => ProcessDistribution,
+    total => Total
+  }.
