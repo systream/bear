@@ -202,12 +202,12 @@ terminate(_Reason, State = #state{}) ->
 should_trigger_distribution(Processes, NodeList) ->
   NodeDistribution = lists:foldl(fun({Id, _Pid, _Modules}, Acc) ->
                                    OnNode = on_node(Id, NodeList),
-                                   Acc#{OnNode => maps:get(on_node, Acc, 0) + 1}
+                                   Acc#{OnNode => maps:get(OnNode, Acc, 0) + 1}
                                  end, #{}, Processes),
   DistributionTolerancePercentage = 10,
   CurrentNodeLoad = maps:get(node(), NodeDistribution, 0),
   Tolerance = max(100, (CurrentNodeLoad div 100) * DistributionTolerancePercentage),
-  lists:any(fun({_, Pc}) -> Pc > Tolerance end, maps:to_list(maps:remove(node, NodeDistribution))).
+  lists:any(fun({_, Pc}) -> Pc > Tolerance end, maps:to_list(maps:remove(node(), NodeDistribution))).
 
 schedule_distribution_check(#state{distribution_check_timer = undefined} = State) ->
   CheckTime = application:get_env(bear, distribution_check_time, ?DEFAULT_DIST_CHK_TIME),
