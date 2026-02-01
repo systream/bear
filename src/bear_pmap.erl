@@ -13,7 +13,9 @@ await([{Pid, MRef} | Rest], Acc) ->
   receive
     {'DOWN', MRef, process, Pid, Reason} ->
       await(Rest, [{error, Reason} | Acc]);
-    {Pid, Res} -> await(Rest, [Res | Acc])
+    {Pid, Res} ->
+      erlang:demonitor(MRef, [flush]),
+      await(Rest, [Res | Acc])
   end;
 await([], Acc) ->
   lists:reverse(Acc).
