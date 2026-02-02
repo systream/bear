@@ -54,7 +54,7 @@
     Reason :: 'normal' | 'shutdown' | {'shutdown', term()} | term(),
     CurrentState :: state(),
     data()) ->
-  any().
+  keep_state | any().
 
 -optional_callbacks([bucket/0]).
 
@@ -115,12 +115,12 @@ drain_node(Node) ->
 undrain_node(Node) ->
   bear_gen_statem_manager:undrain_node(Node).
 
--spec status() -> #{'distribution' => #{node() => neg_integer()},
+-spec status() -> #{'distribution' => #{node() => non_neg_integer() | term()},
                     'total' => non_neg_integer(),
-                    cluster => #{nodes => [node()],
-                                dead_nodes => [node()],
-                                active_nodes => [node()],
-                                drain_nodes => [node()]}}.
+                    'cluster' => #{nodes => [node()],
+                                   dead_nodes => [node()],
+                                   active_nodes => [node()],
+                                   drain_nodes => [node()]}}.
 status() ->
   ClusterNodes = pes:nodes(),
   LiveClusterNodes = pes:live_nodes(),
