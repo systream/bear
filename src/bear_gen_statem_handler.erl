@@ -26,7 +26,7 @@
   cb_data :: term()
 }).
 
--type state() :: #state{}.
+%-type state() :: #state{}.
 
 -record(store_state, {
   cb_data :: term(),

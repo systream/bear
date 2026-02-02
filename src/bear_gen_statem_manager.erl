@@ -202,15 +202,25 @@ terminate(_Reason, State = #state{}) ->
   bear_cfg:remove_node(drain_nodes, node()),
   ok.
 
+should_trigger_distribution([], _NodeList) ->
+  % no processes
+  false;
 should_trigger_distribution(Processes, NodeList) ->
-  NodeDistribution = lists:foldl(fun({Id, _Pid, _Modules}, Acc) ->
-                                   OnNode = on_node(Id, NodeList),
-                                   Acc#{OnNode => maps:get(OnNode, Acc, 0) + 1}
-                                 end, #{}, Processes),
-  DistributionTolerancePercentage = 10,
-  CurrentNodeLoad = maps:get(node(), NodeDistribution, 0),
-  Tolerance = max(100, (CurrentNodeLoad div 100) * DistributionTolerancePercentage),
-  lists:any(fun({_, Pc}) -> Pc > Tolerance end, maps:to_list(maps:remove(node(), NodeDistribution))).
+  ThisNode = node(),
+  case lists:member(ThisNode, NodeList) of
+    true ->
+      NodeDistribution =
+        lists:foldl(fun({Id, _Pid, _Modules}, Acc) ->
+                      OnNode = on_node(Id, NodeList),
+                      Acc#{OnNode => maps:get(OnNode, Acc, 0) + 1}
+                    end, #{ThisNode => 0}, Processes),
+      DistributionTolerancePercentage = 10,
+      {CurrentNodeLoad, NodeDistributionWithoutThis} = maps:take(ThisNode, NodeDistribution),
+      Tolerance = max(100, (CurrentNodeLoad div 100) * DistributionTolerancePercentage),
+      lists:any(fun({_, Pc}) -> Pc > Tolerance end, maps:to_list(NodeDistributionWithoutThis));
+    _ ->
+      true
+  end.
 
 schedule_distribution_check(#state{distribution_check_timer = undefined} = State) ->
   CheckTime = application:get_env(bear, distribution_check_time, ?DEFAULT_DIST_CHK_TIME),
