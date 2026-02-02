@@ -86,7 +86,10 @@ distribute_handlers(Nodes) ->
 -spec drain_node(node()) -> ok.
 drain_node(Node) ->
   bear_cfg:add_node(drain_nodes, Node),
-  ActiveNodes = active_nodes(),
+  % remove node to make sure it is removed, from active node
+  % it could happen, that drain node config change does not propagat
+  % when reading it in active nodes
+  ActiveNodes = lists:delete(Node, active_nodes()),
   distribute_handlers_on_all_nodes(ActiveNodes).
 
 -spec undrain_node(node()) -> ok.
