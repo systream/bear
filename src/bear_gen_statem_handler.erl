@@ -262,8 +262,10 @@ terminate(Reason, StateName, #state{module = Module, stored = Obj, cb_data = CBD
   case Result of
     keep_data ->
       ok;
+    _ when Obj =/= undefined ->
+      ok = rico:remove(Obj);
     _ ->
-      ok = rico:remove(Obj)
+     ok
   end,
   logger:debug("~p (~p) terminated with ~p", [State#state.id, State#state.module, Reason]),
   bear_metrics:decrease([statem, active]),
