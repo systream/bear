@@ -4,7 +4,7 @@
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"3.4.1">>},1},
  {<<"pes">>,
   {git,"https://github.com/systream/pes.git",
-       {ref,"2aaf4bed95b7f1e5d598c0f2eb7dff8dd4c37f1f"}},
+       {ref,"fc3f2f64bf8a51410c84020b83ff227b85081384"}},
   0},
  {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},1},
  {<<"riak_pb">>,
