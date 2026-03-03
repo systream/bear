@@ -11,7 +11,7 @@
 
 -spec add_node(term(), node()) -> ok.
 add_node(Key, Node) ->
-  simple_gossip:set(fun(Data) ->
+  simple_gossip:set_sync(fun(Data) ->
     SGKey = {?MODULE, Key},
     Nodes = maps:get(SGKey, Data, []),
     NewNodes =
@@ -24,7 +24,7 @@ add_node(Key, Node) ->
 
 -spec remove_node(term(), node()) -> ok.
 remove_node(Key, Node) ->
-  simple_gossip:set(fun(Data) ->
+  simple_gossip:set_sync(fun(Data) ->
     SGKey = {?MODULE, Key},
     Nodes = maps:get(SGKey, Data, []),
     NewNodes = lists:delete(Node, Nodes),
