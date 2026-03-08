@@ -163,7 +163,14 @@ handle_event(EventType, _EventContext, {?MODULE, {prepare_handoff, _StateName}},
   {keep_state_and_data, [postpone]};
 
 % handoff state
-handle_event(enter, _PrevState, {?MODULE, {handoff, NewPid, StateName}}, State) ->
+handle_event(enter, _PrevState, {?MODULE, {handoff, NewPid, StateName}}, State0) ->
+  State =
+    case do_handle_event(internal, begin_handoff, StateName, State0) of
+      keep_state_and_data -> State0;
+      {keep_state, NewState} -> NewState;
+      NewState ->
+        throw({error, {bad_return, NewState}})
+    end,
   NewTargetNode = node(NewPid),
   logger:info("~p (~p) starting handoff to ~p (~p)", [State#state.id, State#state.module, NewPid, NewTargetNode]),
   ok = gen_statem:call(NewPid, {?MODULE, {state_handoff, StateName, State}}, ?HANDOFF_TIMEOUT),
@@ -200,8 +207,11 @@ handle_event(info, {?MODULE, {handoff, EventType, EventContext}}, StateName, Sta
   handle_event(EventType, EventContext, StateName, State);
 handle_event(internal, {?MODULE, state_initialized}, StateName, State) ->
   handle_event(enter, StateName, StateName, State);
-handle_event(EventType, EventContent0, StateName, #state{module = Module, cb_data = CBData} = State) ->
+handle_event(EventType, EventContent0, StateName, State) ->
   EventContent = maybe_convert_content(EventType, EventContent0),
+  do_handle_event(EventType, EventContent, StateName, State).
+
+do_handle_event(EventType, EventContent, StateName, #state{module = Module, cb_data = CBData} = State) ->
   case apply(Module, handle_event, [EventType, EventContent, StateName, CBData]) of
     keep_state_and_data ->
       keep_state_and_data;
