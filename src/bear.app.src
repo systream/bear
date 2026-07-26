@@ -10,8 +10,9 @@
     sasl,
     ssl,
     simple_gossip,
-    pes,
+    riakc,
     rico,
+    pes,
     exometer_core
    ]},
   {env,[]},

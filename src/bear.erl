@@ -115,7 +115,7 @@ drain_node(Node) ->
 undrain_node(Node) ->
   bear_gen_statem_manager:undrain_node(Node).
 
--spec status() -> #{'distribution' => #{node() => non_neg_integer() | term()},
+-spec status() -> #{'distribution' => [{node(), non_neg_integer() | term()}],
                     'total' => non_neg_integer(),
                     'cluster' => #{nodes => [node()],
                                    dead_nodes => [node()],
