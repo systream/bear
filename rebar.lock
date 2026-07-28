@@ -4,7 +4,7 @@
  {<<"parse_trans">>,{pkg,<<"parse_trans">>,<<"3.4.1">>},1},
  {<<"pes">>,
   {git,"https://github.com/systream/pes.git",
-       {ref,"fc3f2f64bf8a51410c84020b83ff227b85081384"}},
+       {ref,"7a4e07031f454c942c9f59996af05de8fdbf28b8"}},
   0},
  {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},1},
  {<<"riak_pb">>,
@@ -22,7 +22,7 @@
  {<<"setup">>,{pkg,<<"setup">>,<<"2.1.0">>},1},
  {<<"simple_gossip">>,
   {git,"https://github.com/systream/simple_gossip.git",
-       {ref,"1e17a0043f4222e70347c73c8aaf642a7ca742d2"}},
+       {ref,"48d3db3f47d33375206bca455793b107f22ae60b"}},
   0}]}.
 [
 {pkg_hash,[
